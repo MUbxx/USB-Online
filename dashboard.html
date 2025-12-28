@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Security Dashboard</title>
+<title>CyberMonitor Dashboard</title>
 
 <!-- Google Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-<!-- Tailwind CDN -->
+<!-- Tailwind CSS -->
 <script src="https://cdn.tailwindcss.com"></script>
 
 <style>
@@ -39,30 +39,34 @@ body{
     border-radius:12px;
     border:1px solid #1e293b;
     opacity:0.95;
+    z-index:50;
 }
 </style>
 </head>
 
 <body class="text-gray-200">
 
-<!-- NAVBAR -->
-<div class="w-full p-5 flex justify-between items-center card mb-4">
+<!-- HEADER -->
+<div class="w-full p-5 flex flex-col lg:flex-row justify-between items-start lg:items-center card mb-6 gap-4">
     <div>
-        <h1 class="text-2xl font-bold">Security Monitoring Dashboard</h1>
-        <p class="text-sm text-gray-400">USB Device Protection & Realtime Monitoring</p>
+        <h1 class="text-2xl font-bold">CyberMonitor Dashboard</h1>
+        <p class="text-gray-400 text-sm mt-1">USB Device Protection & Realtime Monitoring</p>
     </div>
 
-    <div class="flex gap-8">
+    <div class="flex flex-col lg:flex-row gap-6 items-start lg:items-center">
+        <!-- Active User -->
         <div>
             <p class="text-gray-400 text-sm">Active User</p>
             <p id="activeUser" class="font-semibold">Loading...</p>
         </div>
 
+        <!-- Host Machine -->
         <div>
             <p class="text-gray-400 text-sm">Host Machine</p>
             <p id="activeHost" class="font-semibold">Loading...</p>
         </div>
 
+        <!-- Agent Status -->
         <div class="flex items-center gap-2">
             <span id="connectionDot" class="w-3 h-3 rounded-full indicator-offline"></span>
             <p id="connectionStatus">Agent Offline</p>
@@ -70,12 +74,21 @@ body{
     </div>
 </div>
 
+<!-- DOWNLOAD AGENT -->
+<div class="card p-5 mb-6 flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-start">
+    <h2 class="text-xl font-semibold mr-4">Download Agent:</h2>
+    <a href="https://raw.githubusercontent.com/yourusername/yourrepo/main/monitor.py" download
+       class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700">Python Agent (.py)</a>
+    <a href="https://raw.githubusercontent.com/yourusername/yourrepo/main/install.bat" download
+       class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700">Installer (.bat)</a>
+</div>
+
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 px-4">
 
-    <!-- USB DEVICE LIST -->
+    <!-- USB DEVICES -->
     <div class="card p-5">
         <h2 class="text-xl font-semibold mb-3">Connected USB Devices</h2>
-        <table class="w-full text-sm">
+        <table class="w-full text-sm table-auto">
             <thead>
                 <tr class="text-gray-400">
                     <th class="text-left py-2">Vendor</th>
@@ -89,11 +102,11 @@ body{
         </table>
     </div>
 
-    <!-- REALTIME LOG STREAM -->
+    <!-- REALTIME LOGS -->
     <div class="card p-5">
         <h2 class="text-xl font-semibold mb-3">Realtime Logs</h2>
-
         <div id="logBox" class="bg-black/40 h-80 overflow-y-auto p-3 rounded-lg text-xs">
+            Loading logs...
         </div>
     </div>
 
@@ -102,21 +115,17 @@ body{
 <!-- WHITELIST MANAGER -->
 <div class="card p-5 m-4 mt-6">
     <h2 class="text-xl font-semibold mb-3">Whitelist Manager</h2>
-
     <div class="flex gap-3 mb-3">
         <input id="whitelistInput" type="text" placeholder="Enter Serial / VID:PID"
                class="w-full p-2 rounded-lg bg-black/30 border border-gray-700">
-
-        <button onclick="addWhitelist()"
-                class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700">
+        <button onclick="addWhitelist()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700">
             Add
         </button>
     </div>
-
     <ul id="whitelistList" class="text-sm"></ul>
 </div>
 
-<!-- Toast Container -->
+<!-- Toast container -->
 <div id="toastContainer"></div>
 
 <script>
@@ -147,19 +156,16 @@ async function updateStatus(){
 /* ---------------- USER / HOST ---------------- */
 async function updateUserInfo(){
     const info = await fetchJSON("/api/userinfo");
-
     document.getElementById("activeUser").innerText = info?.user || "unknown";
     document.getElementById("activeHost").innerText = info?.host || "unknown";
 }
 
 /* ---------------- DEVICES TABLE ---------------- */
 let knownDevices = new Set();
-
 async function updateDevices(){
     const data = await fetchJSON("/api/devices");
     const tbody = document.getElementById("deviceTable");
     tbody.innerHTML = "";
-
     if(!data) return;
 
     data.devices.forEach(dev=>{
@@ -178,7 +184,7 @@ async function updateDevices(){
             <td class="py-2">${dev.whitelisted ? "Whitelisted" : "Untrusted"}</td>
             <td class="py-2">
                 <button onclick="blockDevice('${dev.serial}')"
-                        class="px-3 py-1 bg-red-600 rounded-lg">
+                        class="px-3 py-1 bg-red-600 rounded-lg hover:bg-red-700">
                     Block
                 </button>
             </td>
@@ -201,7 +207,6 @@ async function blockDevice(serial){
 async function updateLogs(){
     const logs = await fetchJSON("/api/logs");
     const box = document.getElementById("logBox");
-
     if(!logs) return;
 
     box.innerHTML = logs.join("<br>");
@@ -213,6 +218,7 @@ async function loadWhitelist(){
     const list = await fetchJSON("/api/whitelist");
     const ul = document.getElementById("whitelistList");
     ul.innerHTML = "";
+    if(!list) return;
 
     list.items.forEach(item=>{
         const li = document.createElement("li");
@@ -220,7 +226,7 @@ async function loadWhitelist(){
 
         li.innerHTML = `
             ${item}
-            <button onclick="removeWhitelist('${item}')" class="text-red-400">
+            <button onclick="removeWhitelist('${item}')" class="text-red-400 hover:text-red-600">
                 remove
             </button>
         `;
@@ -230,12 +236,12 @@ async function loadWhitelist(){
 
 async function addWhitelist(){
     const value = document.getElementById("whitelistInput").value;
+    if(!value) return;
     await fetch("/api/whitelist",{
         method:"POST",
         headers:{ "Content-Type":"application/json"},
         body:JSON.stringify({value})
     });
-
     document.getElementById("whitelistInput").value = "";
     loadWhitelist();
 }
@@ -255,7 +261,6 @@ function showToast(msg){
     t.className="toast";
     t.innerText = msg;
     document.getElementById("toastContainer").appendChild(t);
-
     setTimeout(()=>t.remove(),4000);
 }
 
