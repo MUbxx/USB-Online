@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>CyberMonitor Dashboard</title>
+
+<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
+
+<style>
+body{font-family:Arial;background:#07101f;color:white;margin:0}
+.top{padding:15px;background:#0c1830;display:flex;justify-content:space-between}
+.card{background:#0f1c33;margin:15px;padding:15px;border-radius:15px}
+button{padding:8px 14px;border-radius:10px;border:none;background:#15a3ff;color:white;cursor:pointer}
+.badge{padding:6px 10px;border-radius:10px}
+.online{background:#00c853}
+.offline{background:#c62828}
+table{width:100%;border-collapse:collapse}
+td,th{padding:8px;border-bottom:1px solid #152544}
+input{padding:8px;border-radius:10px;border:none}
+</style>
+</head>
+
+<body>
+
+<div class="top">
+<h2>🛡 CyberMonitor Dashboard</h2>
+<button onclick="logout()">Logout</button>
+</div>
+
+<div class="card">
+<h3>Status</h3>
+<p>Agent Status:
+<span id="status" class="badge offline">Checking…</span></p>
+<p>Last Seen: <span id="lastseen"></span></p>
+</div>
+
+<div class="card">
+<h3>Download Agent</h3>
+<button onclick="window.location='monitor.py'">Download Python Agent</button>
+<button onclick="window.location='install.bat'">Download Auto Installer</button>
+</div>
+
+<div class="card">
+<h3>Whitelist Devices</h3>
+<input id="serial" placeholder="Device Serial">
+<button onclick="addWhitelist()">Add</button>
+<ul id="wl"></ul>
+</div>
+
+<div class="card">
+<h3>Policies</h3>
+<label><input type="checkbox" id="p1"> Block Unknown Devices</label><br>
+<label><input type="checkbox" id="p2"> Alert On HID Devices</label><br>
+<label><input type="checkbox" id="p3"> Read-Only Mode</label><br>
+<button onclick="savePolicies()">Save Policies</button>
+</div>
+
+<div class="card">
+<h3>Recent Logs</h3>
+<table>
+<thead>
+<tr><th>Device</th><th>Action</th><th>Time</th></tr>
+</thead>
+<tbody id="logs"></tbody>
+</table>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
+  authDomain: "cybermonitor-1ab3c.firebaseapp.com",
+  projectId: "cybermonitor-1ab3c",
+  storageBucket: "cybermonitor-1ab3c.appspot.com",
+  messagingSenderId: "569408987884",
+  appId: "1:569408987884:web:0839eb7932c206fc157bc9",
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth=firebase.auth();
+const db=firebase.firestore();
+let uid=null;
+
+auth.onAuthStateChanged(u=>{
+ if(!u) location="login.html";
+ uid=u.uid;
+ load();
+});
+
+function logout(){auth.signOut();}
+
+function load(){
+
+ // Status live
+ db.collection("status").doc(uid).onSnapshot(d=>{
+   if(!d.exists) return;
+   let data=d.data();
+   document.getElementById("status").innerText=data.online?"Online":"Offline";
+   document.getElementById("status").className="badge "+(data.online?"online":"offline");
+   document.getElementById("lastseen").innerText=new Date(data.last_seen*1000).toLocaleString();
+ });
+
+ // Whitelist view
+ db.collection("users").doc(uid).onSnapshot(d=>{
+   let wl=d.data().whitelist||[];
+   const list=document.getElementById("wl");
+   list.innerHTML="";
+   wl.forEach(s=>{
+     let li=document.createElement("li");
+     li.innerHTML=s+" <button onclick=\"removeWhitelist('"+s+"')\">X</button>";
+     list.appendChild(li);
+   });
+   let p=d.data().policies;
+   document.getElementById("p1").checked=p.blockUnknown;
+   document.getElementById("p2").checked=p.alertHID;
+   document.getElementById("p3").checked=p.readOnly;
+ });
+
+ // Logs live
+ db.collection("logs").where("uid","==",uid).orderBy("timestamp","desc").limit(20)
+ .onSnapshot(s=>{
+   const el=document.getElementById("logs");
+   el.innerHTML="";
+   s.forEach(doc=>{
+     let d=doc.data();
+     el.innerHTML+=`<tr>
+     <td>${d.device_name}</td>
+     <td>${d.action}</td>
+     <td>${new Date(d.timestamp*1000).toLocaleString()}</td>
+     </tr>`;
+   });
+ });
+}
+
+function addWhitelist(){
+ let s=document.getElementById("serial").value;
+ db.collection("users").doc(uid).update({
+   whitelist:firebase.firestore.FieldValue.arrayUnion(s)
+ });
+}
+
+function removeWhitelist(s){
+ db.collection("users").doc(uid).update({
+   whitelist:firebase.firestore.FieldValue.arrayRemove(s)
+ });
+}
+
+function savePolicies(){
+ db.collection("users").doc(uid).update({
+   policies:{
+     blockUnknown:document.getElementById("p1").checked,
+     alertHID:document.getElementById("p2").checked,
+     readOnly:document.getElementById("p3").checked
+   }
+ });
+}
+</script>
+</body>
+</html>
