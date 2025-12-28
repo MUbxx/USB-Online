@@ -1,35 +1,64 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>CyberMonitor – Register</title>
-<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CyberMonitor Register</title>
+
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
 <style>
-body{font-family:Arial;background:#0b1220;color:white;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}
-.card{background:#111c33;padding:30px;border-radius:20px;box-shadow:0 0 30px #000;width:350px}
-input{width:100%;padding:10px;border-radius:10px;margin-top:10px;border:none}
-button{width:100%;margin-top:15px;padding:10px;border-radius:10px;border:none;font-size:16px;background:#15a3ff;color:white;cursor:pointer}
-a{color:#5bc0ff}
+body {
+    background: #0b1220;
+    font-family: 'Inter', sans-serif;
+}
+.card {
+    background:#101a33;
+    border:1px solid #1e2b4d;
+    border-radius:18px;
+}
 </style>
 </head>
 
-<body>
-<div class="card">
-<h2>🆕 Create Account</h2>
+<body class="flex justify-center items-center h-screen">
 
-<input id="email" placeholder="Email">
-<input id="password" type="password" placeholder="Password">
+<div class="card p-8 w-full max-w-md">
+    <h1 class="text-2xl font-bold mb-6 text-white">Register Account</h1>
 
-<button onclick="register()">Register</button>
+    <div class="mb-4">
+        <label class="text-gray-300 mb-1 block">Email</label>
+        <input id="email" type="email" placeholder="Enter your email"
+               class="w-full p-2 rounded-lg bg-black/30 border border-gray-700 text-white">
+    </div>
 
-<p>Already have account? <a href="index.html">Login</a></p>
+    <div class="mb-4">
+        <label class="text-gray-300 mb-1 block">Password</label>
+        <input id="password" type="password" placeholder="Enter password"
+               class="w-full p-2 rounded-lg bg-black/30 border border-gray-700 text-white">
+    </div>
 
-<p id="msg"></p>
+    <div class="mb-6">
+        <label class="text-gray-300 mb-1 block">Confirm Password</label>
+        <input id="confirmPassword" type="password" placeholder="Confirm password"
+               class="w-full p-2 rounded-lg bg-black/30 border border-gray-700 text-white">
+    </div>
+
+    <button onclick="registerUser()" class="w-full bg-green-600 hover:bg-green-700 p-2 rounded-lg font-semibold text-white">Register</button>
+
+    <p class="mt-4 text-gray-400 text-sm text-center">
+        Already have an account? <a href="login.html" class="text-blue-400 hover:underline">Login</a>
+    </p>
+
+    <p id="registerError" class="text-red-500 mt-2 text-sm"></p>
 </div>
 
 <script>
+// ---------------- Firebase Setup ----------------
 const firebaseConfig = {
   apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
   authDomain: "cybermonitor-1ab3c.firebaseapp.com",
@@ -38,33 +67,30 @@ const firebaseConfig = {
   messagingSenderId: "569408987884",
   appId: "1:569408987884:web:0839eb7932c206fc157bc9",
 };
-
 firebase.initializeApp(firebaseConfig);
-const auth=firebase.auth();
-const db=firebase.firestore();
+const auth = firebase.auth();
 
-function register(){
- let email=document.getElementById("email").value;
- let password=document.getElementById("password").value;
+// ---------------- Register Function ----------------
+function registerUser(){
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+    const confirmPassword = document.getElementById("confirmPassword").value;
 
- auth.createUserWithEmailAndPassword(email,password).then(cred=>{
+    if(password !== confirmPassword){
+        document.getElementById("registerError").innerText = "Passwords do not match!";
+        return;
+    }
 
- db.collection("users").doc(cred.user.uid).set({
-   created:new Date(),
-   online:false,
-   whitelist:[],
-   policies:{
-     blockUnknown:true,
-     alertHID:true,
-     readOnly:false
-   }
- });
-
- window.location="dashboard.html";
- }).catch(e=>{
-   document.getElementById("msg").innerText=e.message;
- });
+    auth.createUserWithEmailAndPassword(email, password)
+        .then((userCredential)=>{
+            // Redirect to dashboard
+            window.location.href = "dashboard.html";
+        })
+        .catch((error)=>{
+            document.getElementById("registerError").innerText = error.message;
+        });
 }
 </script>
+
 </body>
 </html>
