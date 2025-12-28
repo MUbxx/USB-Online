@@ -14,12 +14,11 @@ body { background: #0b1220; font-family: 'Inter', sans-serif; color: #e5e7eb; }
 .card { background:#101a33;border:1px solid #1e2b4d;border-radius:16px; }
 .indicator-online { background: #16a34a; }
 .indicator-offline { background: #dc2626; }
-.toast { position: fixed; right: 25px; bottom: 25px; background: #0f172a; color:white; padding:14px 16px; border-radius:12px; border:1px solid #1e293b; opacity:0.95; z-index:50; }
+.toast { position: fixed; right: 25px; bottom: 25px; background: #0f172a; color:white; padding:14px 16px; border-radius:12px; border:1px solid #1e293b; opacity:0.95; z-index:50; transition: opacity 0.3s; }
 </style>
 </head>
 <body class="flex h-screen overflow-hidden">
 
-<!-- SIDE NAV -->
 <div class="w-64 bg-[#101a33] flex flex-col p-4">
     <h1 class="text-2xl font-bold mb-6">CyberMonitor</h1>
     <ul class="flex flex-col gap-3 text-gray-300">
@@ -34,10 +33,8 @@ body { background: #0b1220; font-family: 'Inter', sans-serif; color: #e5e7eb; }
     </div>
 </div>
 
-<!-- MAIN CONTENT -->
 <div class="flex-1 p-6 overflow-y-auto space-y-6">
 
-<!-- DASHBOARD SUMMARY -->
 <div id="dashboardSection" class="space-y-4">
     <div class="flex flex-wrap gap-4">
         <div class="card p-4 flex-1 min-w-[220px]">
@@ -65,12 +62,11 @@ body { background: #0b1220; font-family: 'Inter', sans-serif; color: #e5e7eb; }
     </div>
 </div>
 
-<!-- USB DEVICES -->
 <div id="usbSection" class="hidden card p-4">
     <h2 class="text-xl font-semibold mb-3">Connected USB Devices</h2>
     <table class="w-full text-sm table-auto">
         <thead>
-            <tr class="text-gray-400">
+            <tr class="text-gray-400 border-b border-gray-700">
                 <th class="py-2 text-left">Vendor</th>
                 <th class="py-2 text-left">Product</th>
                 <th class="py-2 text-left">Serial</th>
@@ -83,23 +79,20 @@ body { background: #0b1220; font-family: 'Inter', sans-serif; color: #e5e7eb; }
     </table>
 </div>
 
-<!-- LOGS -->
 <div id="logsSection" class="hidden card p-4">
     <h2 class="text-xl font-semibold mb-3">Realtime Logs</h2>
-    <div id="logBox" class="h-80 overflow-y-auto bg-black/30 p-3 rounded text-xs">Loading logs...</div>
+    <div id="logBox" class="h-80 overflow-y-auto bg-black/30 p-3 rounded text-xs font-mono">Loading logs...</div>
 </div>
 
-<!-- WHITELIST -->
 <div id="whitelistSection" class="hidden card p-4">
     <h2 class="text-xl font-semibold mb-3">Whitelist Manager</h2>
     <div class="flex gap-2 mb-3">
-        <input id="whitelistInput" type="text" placeholder="Serial / VID:PID" class="flex-1 p-2 rounded bg-black/20 border border-gray-600">
+        <input id="whitelistInput" type="text" placeholder="Serial / VID:PID" class="flex-1 p-2 rounded bg-black/20 border border-gray-600 focus:outline-none focus:border-blue-500">
         <button onclick="addWhitelist()" class="px-3 py-1 bg-blue-600 rounded hover:bg-blue-700">Add</button>
     </div>
-    <ul id="whitelistList" class="text-sm"></ul>
+    <ul id="whitelistList" class="text-sm space-y-1"></ul>
 </div>
 
-<!-- PROFILE MODAL -->
 <div id="profileModal" class="hidden fixed inset-0 bg-black/50 flex justify-center items-center z-50">
   <div class="bg-[#101a33] rounded-xl p-6 w-96 relative">
     <h2 class="text-xl font-semibold mb-4">Profile</h2>
@@ -114,13 +107,12 @@ body { background: #0b1220; font-family: 'Inter', sans-serif; color: #e5e7eb; }
   </div>
 </div>
 
-<!-- Toast container -->
 <div id="toastContainer"></div>
 
 <script>
 const firebaseConfig = {apiKey:"AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",authDomain:"cybermonitor-1ab3c.firebaseapp.com",projectId:"cybermonitor-1ab3c",storageBucket:"cybermonitor-1ab3c.appspot.com",messagingSenderId:"569408987884",appId:"1:569408987c206fc157bc9"};
 firebase.initializeApp(firebaseConfig);
-const auth=firebase.auth(), db=firebase.firestore(), functions=firebase.functions();
+const auth=firebase.auth(), db=firebase.firestore();
 let uid=null, knownDevices=new Set();
 
 function toggleProfile(){document.getElementById("profileModal").classList.toggle("hidden");}
@@ -134,54 +126,126 @@ auth.onAuthStateChanged(async user=>{
 });
 
 async function loadProfile(user){
-    const profileDoc=await db.collection("users").doc(uid).get();
-    const data=profileDoc.exists?profileDoc.data():{};
-    document.getElementById("firstName").innerText=data.first_name||"N/A";
-    document.getElementById("lastName").innerText=data.last_name||"N/A";
-    document.getElementById("phone").innerText=data.phone||"N/A";
-    document.getElementById("profileEmail").innerText=user.email;
-}
-
-function initDashboard(){
-    updateStatus(); updateDevices(); updateLogs(); loadWhitelist();
-    setInterval(updateStatus,2000); setInterval(updateDevices,2500); setInterval(updateLogs,2000); setInterval(loadWhitelist,5000);
-}
-
-async function updateStatus(){
-    const doc=await db.collection("users").doc(uid).get();
-    if(!doc.exists) return;
-    const data=doc.data();
-    const dot=document.getElementById("connectionDot"), text=document.getElementById("connectionStatus");
-    if(data.online){dot.className="w-3 h-3 rounded-full indicator-online";text.innerText="Agent Online";}
-    else{dot.className="w-3 h-3 rounded-full indicator-offline";text.innerText="Agent Offline";}
-    document.getElementById("activeUser").innerText=data.active_user||"unknown";
-    document.getElementById("activeHost").innerText=data.machine||"unknown";
-}
-
-async function updateDevices(){
-    const usbDoc=await db.collection("users").doc(uid).collection("status").doc("usb_status").get();
-    if(!usbDoc.exists) return;
-    const devices=usbDoc.data().usb_devices||[];
-    const tbody=document.getElementById("deviceTable"); tbody.innerHTML="";
-    devices.forEach(dev=>{
-        const key=dev.serial||dev.device_name;
-        if(!knownDevices.has(key)){showToast("New USB: "+key); knownDevices.add(key);}
-        const tr=document.createElement("tr");
-        tr.innerHTML=`<td class="py-2">${dev.vendor||"—"}</td>
-        <td class="py-2">${dev.device_name||"—"}</td>
-        <td class="py-2">${dev.serial||"—"}</td>
-        <td class="py-2">${dev.class||"Mass Storage"}</td>
-        <td class="py-2">${dev.whitelisted?"Whitelisted":dev.blocked?"Blocked":"Untrusted"}</td>
-        <td class="py-2">
-            <button onclick="blockDevice('${dev.serial}')" class="px-2 py-1 bg-red-600 rounded hover:bg-red-700 text-white">Block</button>
-            <button onclick="allowDevice('${dev.serial}')" class="px-2 py-1 bg-green-600 rounded hover:bg-green-700 text-white ml-2">Allow</button>
-        </td>`;
-        tbody.appendChild(tr);
+    db.collection("users").doc(uid).onSnapshot(doc => {
+        const data = doc.exists ? doc.data() : {};
+        document.getElementById("firstName").innerText=data.first_name||"N/A";
+        document.getElementById("lastName").innerText=data.last_name||"N/A";
+        document.getElementById("phone").innerText=data.phone||"N/A";
+        document.getElementById("profileEmail").innerText=user.email;
     });
 }
 
-// Add updateLogs(), loadWhitelist(), addWhitelist(), removeWhitelist(), blockDevice(), allowDevice(), sendToast()...
-// For brevity, similar as previous code snippet.
+function initDashboard(){
+    // Using onSnapshot listeners instead of setInterval for efficiency and real-time updates
+    listenToStatus();
+    listenToDevices();
+    listenToLogs();
+    listenToWhitelist();
+}
+
+function listenToStatus(){
+    db.collection("users").doc(uid).onSnapshot(doc => {
+        if(!doc.exists) return;
+        const data=doc.data();
+        const dot=document.getElementById("connectionDot"), text=document.getElementById("connectionStatus");
+        if(data.online){dot.className="w-3 h-3 rounded-full indicator-online";text.innerText="Agent Online";}
+        else{dot.className="w-3 h-3 rounded-full indicator-offline";text.innerText="Agent Offline";}
+        document.getElementById("activeUser").innerText=data.active_user||"unknown";
+        document.getElementById("activeHost").innerText=data.machine||"unknown";
+    });
+}
+
+function listenToDevices(){
+    db.collection("users").doc(uid).collection("status").doc("usb_status").onSnapshot(doc => {
+        if(!doc.exists) return;
+        const devices=doc.data().usb_devices||[];
+        const tbody=document.getElementById("deviceTable"); 
+        tbody.innerHTML="";
+        devices.forEach(dev=>{
+            const key=dev.serial||dev.device_name;
+            if(!knownDevices.has(key)){showToast("New USB Detected: "+key); knownDevices.add(key);}
+            const tr=document.createElement("tr");
+            tr.className = "border-b border-gray-800 hover:bg-white/5";
+            tr.innerHTML=`<td class="py-2">${dev.vendor||"—"}</td>
+            <td class="py-2">${dev.device_name||"—"}</td>
+            <td class="py-2">${dev.serial||"—"}</td>
+            <td class="py-2">${dev.class||"Mass Storage"}</td>
+            <td class="py-2 font-medium ${dev.blocked ? 'text-red-400' : 'text-green-400'}">
+                ${dev.whitelisted?"Whitelisted":dev.blocked?"Blocked":"Untrusted"}
+            </td>
+            <td class="py-2">
+                <button onclick="updateDeviceAction('${dev.serial}', true)" class="px-2 py-1 bg-red-600/20 text-red-400 border border-red-600/50 rounded hover:bg-red-600 hover:text-white text-xs">Block</button>
+                <button onclick="updateDeviceAction('${dev.serial}', false)" class="px-2 py-1 bg-green-600/20 text-green-400 border border-green-600/50 rounded hover:bg-green-600 hover:text-white text-xs ml-2">Allow</button>
+            </td>`;
+            tbody.appendChild(tr);
+        });
+    });
+}
+
+function listenToLogs(){
+    db.collection("users").doc(uid).collection("logs").orderBy("timestamp", "desc").limit(50).onSnapshot(snap => {
+        const logBox = document.getElementById("logBox");
+        logBox.innerHTML = "";
+        snap.forEach(doc => {
+            const log = doc.data();
+            const p = document.createElement("p");
+            p.className = "mb-1";
+            p.innerHTML = `<span class="text-blue-400">[${log.timestamp?.toDate().toLocaleTimeString() || '...'}]</span> ${log.message}`;
+            logBox.appendChild(p);
+        });
+    });
+}
+
+function listenToWhitelist(){
+    db.collection("users").doc(uid).onSnapshot(doc => {
+        const list = document.getElementById("whitelistList");
+        list.innerHTML = "";
+        const whitelist = doc.data()?.whitelist || [];
+        whitelist.forEach(item => {
+            const li = document.createElement("li");
+            li.className = "flex justify-between items-center bg-black/20 p-2 rounded";
+            li.innerHTML = `<span>${item}</span><button onclick="removeWhitelist('${item}')" class="text-red-500 hover:text-red-400">Remove</button>`;
+            list.appendChild(li);
+        });
+    });
+}
+
+async function updateDeviceAction(serial, blockStatus) {
+    // This updates the 'commands' collection which the Python agent should be listening to
+    await db.collection("users").doc(uid).collection("commands").add({
+        action: blockStatus ? "BLOCK" : "ALLOW",
+        target_serial: serial,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast(blockStatus ? "Block command sent" : "Allow command sent");
+}
+
+async function addWhitelist() {
+    const input = document.getElementById("whitelistInput");
+    const val = input.value.trim();
+    if(!val) return;
+    await db.collection("users").doc(uid).update({
+        whitelist: firebase.firestore.FieldValue.arrayUnion(val)
+    });
+    input.value = "";
+    showToast("Added to Whitelist");
+}
+
+async function removeWhitelist(item) {
+    await db.collection("users").doc(uid).update({
+        whitelist: firebase.firestore.FieldValue.arraySubtract(item)
+    });
+    showToast("Removed from Whitelist");
+}
+
+function showToast(msg) {
+    const container = document.getElementById("toastContainer");
+    const div = document.createElement("div");
+    div.className = "toast";
+    div.innerText = msg;
+    container.appendChild(div);
+    setTimeout(() => { div.style.opacity = "0"; setTimeout(() => div.remove(), 500); }, 3000);
+}
 </script>
 </body>
 </html>
