@@ -5,11 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>CyberMonitor Dashboard</title>
 
-<!-- Google Fonts -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-
 <!-- Tailwind CSS -->
 <script src="https://cdn.tailwindcss.com"></script>
 
@@ -71,6 +66,9 @@ body{
             <span id="connectionDot" class="w-3 h-3 rounded-full indicator-offline"></span>
             <p id="connectionStatus">Agent Offline</p>
         </div>
+        <div>
+            <button onclick="logout()" class="px-3 py-1 bg-red-600 rounded-lg hover:bg-red-700 text-white text-sm">Logout</button>
+        </div>
     </div>
 </div>
 
@@ -78,9 +76,9 @@ body{
 <div class="card p-5 mb-6 flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-start">
     <h2 class="text-xl font-semibold mr-4">Download Agent:</h2>
     <a href="https://raw.githubusercontent.com/yourusername/yourrepo/main/monitor.py" download
-       class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700">Python Agent (.py)</a>
+       class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white">Python Agent (.py)</a>
     <a href="https://raw.githubusercontent.com/yourusername/yourrepo/main/install.bat" download
-       class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700">Installer (.bat)</a>
+       class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white">Installer (.bat)</a>
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 px-4">
@@ -117,8 +115,8 @@ body{
     <h2 class="text-xl font-semibold mb-3">Whitelist Manager</h2>
     <div class="flex gap-3 mb-3">
         <input id="whitelistInput" type="text" placeholder="Enter Serial / VID:PID"
-               class="w-full p-2 rounded-lg bg-black/30 border border-gray-700">
-        <button onclick="addWhitelist()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700">
+               class="w-full p-2 rounded-lg bg-black/30 border border-gray-700 text-white">
+        <button onclick="addWhitelist()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white">
             Add
         </button>
     </div>
@@ -142,9 +140,37 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// ---------------- GLOBALS ----------------
-let uid = prompt("Enter your Firebase UID:");
+let uid = null;
 let knownDevices = new Set();
+
+// ---------------- LOGOUT ----------------
+function logout(){
+    auth.signOut().then(()=>{
+        window.location.href="login.html";
+    });
+}
+
+// ---------------- INIT DASHBOARD ----------------
+auth.onAuthStateChanged(user=>{
+    if(user){
+        uid = user.uid;
+        initDashboard();
+    }else{
+        window.location.href="login.html";
+    }
+});
+
+function initDashboard(){
+    updateStatus();
+    updateDevices();
+    updateLogs();
+    loadWhitelist();
+
+    setInterval(updateStatus, 2000);
+    setInterval(updateDevices, 2500);
+    setInterval(updateLogs, 2000);
+    setInterval(loadWhitelist, 5000);
+}
 
 // ---------------- STATUS ----------------
 async function updateStatus(){
@@ -189,7 +215,7 @@ async function updateDevices(){
             <td class="py-2">${dev.whitelisted?"Whitelisted":"Untrusted"}</td>
             <td class="py-2">
                 <button onclick="blockDevice('${dev.serial}')"
-                        class="px-3 py-1 bg-red-600 rounded-lg hover:bg-red-700">
+                        class="px-3 py-1 bg-red-600 rounded-lg hover:bg-red-700 text-white">
                     Block
                 </button>
             </td>
@@ -256,17 +282,6 @@ function showToast(msg){
     document.getElementById("toastContainer").appendChild(t);
     setTimeout(()=>t.remove(),4000);
 }
-
-// ---------------- INTERVALS ----------------
-updateStatus();
-updateDevices();
-updateLogs();
-loadWhitelist();
-
-setInterval(updateStatus, 2000);
-setInterval(updateDevices, 2500);
-setInterval(updateLogs, 2000);
-setInterval(loadWhitelist, 5000);
 </script>
 
 </body>
