@@ -1,204 +1,169 @@
 import requests
 import time
-import json
-import os
 import socket
 import psutil
 import wmi
+from datetime import datetime
+from getpass import getpass
 
-API_KEY="AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k"
-PROJECT="cybermonitor-1ab3c"
+# ---------- FIREBASE CONFIG ----------
+API_KEY = "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k"
+PROJECT_ID = "cybermonitor-1ab3c"
+# -------------------------------------
 
-w=wmi.WMI()
-hostname=socket.gethostname()
+print("==== CyberMonitor Agent ====")
 
-CONFIG_FILE="agent_auth.json"
+USER_EMAIL = input("Enter your CyberMonitor email: ")
+USER_PASSWORD = getpass("Password: ")
 
-
-# ------------------------------------------
-# Save + load local auth
-# ------------------------------------------
-def save_config(data):
-    with open(CONFIG_FILE,"w") as f:
-        json.dump(data,f)
-
-def load_config():
-    if not os.path.exists(CONFIG_FILE):
-        return None
-    with open(CONFIG_FILE) as f:
-        return json.load(f)
+wmi_obj = wmi.WMI()
+hostname = socket.gethostname()
+known_devices = set()
 
 
-# ------------------------------------------
-# Firebase authentication
-# ------------------------------------------
-def login():
-    email=input("Enter your CyberMonitor email: ")
-    password=input("Password: ")
+# -------- Authenticate user & get ID token -------
+def login_and_get_token():
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={API_KEY}"
 
-    url=f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={API_KEY}"
-    r=requests.post(url,json={
-        "email":email,
-        "password":password,
-        "returnSecureToken":True
-    })
+    payload = {
+        "email": USER_EMAIL,
+        "password": USER_PASSWORD,
+        "returnSecureToken": True
+    }
 
+    r = requests.post(url, json=payload)
+    print("LOGIN RESP:", r.text)
     r.raise_for_status()
-    data=r.json()
-    save_config(data)
+    data = r.json()
 
-    return data["idToken"], data["localId"], data["refreshToken"]
+    return data["idToken"], data["localId"]
 
 
-def refresh(refresh_token):
-    url=f"https://securetoken.googleapis.com/v1/token?key={API_KEY}"
-    r=requests.post(url,data={
-        "grant_type":"refresh_token",
-        "refresh_token":refresh_token
-    })
+# ----- Firestore request wrapper -----
+def firestore_set(path, obj, token):
+    url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/{path}"
+    headers = {"Authorization": f"Bearer {token}"}
 
+    r = requests.patch(url, json=obj, headers=headers)
+    print("SET RESP:", r.text)
     r.raise_for_status()
-    j=r.json()
-
-    return j["id_token"], j["user_id"], refresh_token
 
 
-# ------------------------------------------
-# Firestore helpers
-# ------------------------------------------
-def firestore(path, method, obj, token):
-    url=f"https://firestore.googleapis.com/v1/projects/{PROJECT}/databases/(default)/documents/{path}"
-    headers={"Authorization":f"Bearer {token}"}
+def firestore_add(collection_path, obj, token):
+    url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/{collection_path}"
+    headers = {"Authorization": f"Bearer {token}"}
 
-    res=getattr(requests,method)(url,json=obj,headers=headers)
-
-    return res.json()
+    r = requests.post(url, json=obj, headers=headers)
+    print("ADD RESP:", r.text)
+    r.raise_for_status()
 
 
-def get_document(path, token):
-    url=f"https://firestore.googleapis.com/v1/projects/{PROJECT}/databases/(default)/documents/{path}"
-    headers={"Authorization":f"Bearer {token}"}
-    r=requests.get(url,headers=headers)
-    return r.json()
+# -------- USB detection ----------
+def get_usb_devices():
+    devices = []
 
-
-# ------------------------------------------
-# USB Enum
-# ------------------------------------------
-def get_usb():
-    devs=[]
-    for d in w.Win32_DiskDrive():
+    for d in wmi_obj.Win32_DiskDrive():
         if "USB" in str(d.InterfaceType):
-            devs.append({
-                "name":d.Model,
-                "serial":getattr(d,"SerialNumber","UNKNOWN")
+            devices.append({
+                "device_name": d.Model,
+                "serial": getattr(d, "SerialNumber", "UNKNOWN"),
             })
-    return devs
+    return devices
 
 
-# ------------------------------------------
-# Login or refresh token
-# ------------------------------------------
-cfg=load_config()
-if cfg:
-    token,uid,rt=refresh(cfg["refreshToken"])
-else:
-    token,uid,rt=login()
+print("Logging into Firebase…")
+token, uid = login_and_get_token()
+print("Logged in as UID:", uid)
 
-print("Logged in as UID:",uid)
-
-known=set()
+print("Agent running. Press CTRL+C to stop.")
 
 while True:
     try:
-        # -------------------------------------------------------
-        # Heartbeat
-        # -------------------------------------------------------
-        firestore(f"status/{uid}","patch",{
-            "fields":{
-                "online":{"booleanValue":True},
-                "last_seen":{"integerValue":int(time.time())},
-                "machine":{"stringValue":hostname},
-                "active_user":{"stringValue": psutil.users()[0].name if psutil.users() else "UNKNOWN"}
+        usb_list = get_usb_devices()
+
+        current_serials = {d["serial"] for d in usb_list}
+        new_devices = current_serials - known_devices
+        known_devices.update(current_serials)
+
+        # ---------- STATUS DOCUMENT ----------
+        status_doc = {
+            "fields": {
+                "online": {"booleanValue": True},
+                "machine": {"stringValue": hostname},
+                "last_seen": {"integerValue": int(time.time())},
+                "active_user": {
+                    "stringValue": psutil.users()[0].name if psutil.users() else "UNKNOWN"
+                },
             }
-        },token)
+        }
 
-        # -------------------------------------------------------
-        # Fetch user doc (or auto-create)
-        # -------------------------------------------------------
-        user_doc=get_document(f"users/{uid}",token)
+        firestore_set(f"users/{uid}", status_doc, token)
 
-        if "fields" not in user_doc:
-            # auto create default user doc
-            print("User document missing — creating defaults")
-
-            firestore(f"users/{uid}","patch",{
-              "fields":{
-                "whitelist":{"arrayValue":{}},
-                "policies":{"mapValue":{
-                   "fields":{
-                     "blockUnknown":{"booleanValue":True},
-                     "alertHID":{"booleanValue":True},
-                     "readOnly":{"booleanValue":False}
-                   }
-                }}
-              }
-            },token)
-
-            wl=[]
-            blockUnknown=True
-            alertHID=True
-
-        else:
-            # read safely
-            fields=user_doc["fields"]
-
-            wl=[]
-            if "whitelist" in fields:
-                wl=[v["stringValue"] for v in fields["whitelist"]["arrayValue"].get("values",[])]
-
-            pol = fields.get("policies",{}).get("mapValue",{}).get("fields",{})
-
-            blockUnknown = pol.get("blockUnknown",{"booleanValue":True})["booleanValue"]
-            alertHID = pol.get("alertHID",{"booleanValue":True})["booleanValue"]
-
-        # -------------------------------------------------------
-        # USB Detection
-        # -------------------------------------------------------
-        usb=get_usb()
-
-        current={d["serial"] for d in usb}
-        new=current-known
-        known=current
-
-        for d in usb:
-            serial=d["serial"]
-            name=d["name"]
-
-            if serial in wl:
-                action="WHITELISTED"
-            elif blockUnknown:
-                action="BLOCKED"
-            else:
-                action="ALLOWED"
-
-            log={
-              "fields":{
-                "uid":{"stringValue":uid},
-                "device_serial":{"stringValue":serial},
-                "device_name":{"stringValue":name},
-                "machine":{"stringValue":hostname},
-                "action":{"stringValue":action},
-                "timestamp":{"integerValue":int(time.time())}
-              }
+        # ---------- CREATE WHITELIST DOC IF MISSING ----------
+        whitelist_doc = {
+            "fields": {
+                "devices": {
+                    "arrayValue": {
+                        "values": []
+                    }
+                }
             }
+        }
 
-            firestore("logs","post",log,token)
+        firestore_set(f"users/{uid}/config/whitelist", whitelist_doc, token)
 
-        print("✓ Heartbeat + policy sync OK")
+        # ---------- USB DEVICE LIST DOCUMENT ----------
+        device_array = []
+        for dev in usb_list:
+            device_array.append({
+                "mapValue": {
+                    "fields": {
+                        "device_name": {"stringValue": dev["device_name"]},
+                        "serial": {"stringValue": dev["serial"]}
+                    }
+                }
+            })
 
-        time.sleep(7)
+        firestore_set(
+            f"users/{uid}/status/usb_status",
+            {
+                "fields": {
+                    "usb_devices": {
+                        "arrayValue": {"values": device_array}
+                    }
+                }
+            },
+            token
+        )
+
+        # ---------- LOG NEW DEVICES ----------
+        for dev in usb_list:
+            if dev["serial"] in new_devices:
+
+                log = {
+                    "fields": {
+                        "device_serial": {"stringValue": dev["serial"]},
+                        "device_name": {"stringValue": dev["device_name"]},
+                        "machine": {"stringValue": hostname},
+                        "action": {"stringValue": "CONNECTED"},
+                        "rule": {"stringValue": "Detection Event"},
+                        "class": {"stringValue": "Mass Storage"},
+                        "timestamp": {"integerValue": int(time.time())},
+                        "severity": {"stringValue": "MEDIUM"}
+                    }
+                }
+
+                firestore_add(f"users/{uid}/logs", log, token)
+
+        print("Heartbeat sent at", datetime.now())
+
+    except KeyboardInterrupt:
+        print("Agent stopped by user.")
+        break
 
     except Exception as e:
-        print("Error:",e)
-        time.sleep(5)
+        print("Error:", str(e))
+        import traceback
+        traceback.print_exc()
+
+    time.sleep(7)
