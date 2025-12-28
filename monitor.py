@@ -16,8 +16,6 @@ USER_PASSWORD = input("Password: ")
 wmi_obj = wmi.WMI()
 hostname = socket.gethostname()
 known_devices = set()
-whitelist = set()
-blocked = set()
 
 # ---------------- LOGIN ----------------
 def login_and_get_token():
@@ -33,75 +31,58 @@ def firestore_set(path, obj, token):
     url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/{path}"
     headers = {"Authorization": f"Bearer {token}"}
     r = requests.patch(url, json=obj, headers=headers)
-    r.raise_for_status()
     return r.json()
 
 def firestore_add(collection_path, obj, token):
     url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/{collection_path}"
     headers = {"Authorization": f"Bearer {token}"}
     r = requests.post(url, json=obj, headers=headers)
-    r.raise_for_status()
     return r.json()
 
 # ---------------- USB DETECTION ----------------
 def get_usb_devices():
     devices = []
-    for d in wmi_obj.Win32_DiskDrive():
-        if "USB" in str(d.InterfaceType):
-            serial = getattr(d, "SerialNumber", "UNKNOWN")
-            devices.append({
-                "device_name": d.Model,
-                "serial": serial.strip() if serial else "UNKNOWN",
-                "vendor": getattr(d, "Manufacturer", "Unknown"),
-                "class": "Mass Storage"
-            })
+    try:
+        for d in wmi_obj.Win32_DiskDrive():
+            if "USB" in str(d.InterfaceType):
+                serial = getattr(d, "SerialNumber", "UNKNOWN").strip()
+                devices.append({
+                    "device_name": d.Model,
+                    "serial": serial if serial else "UNKNOWN",
+                    "vendor": getattr(d, "Manufacturer", "Unknown"),
+                    "class": "Mass Storage"
+                })
+    except: pass
     return devices
 
-# ---------------- LOAD WHITELIST & BLOCKED ----------------
-def load_config(token, uid):
-    global whitelist, blocked
-    try:
-        wl_resp = requests.get(f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/users/{uid}/config/whitelist",
-                               headers={"Authorization": f"Bearer {token}"}).json()
-        whitelist = set([d["stringValue"] for d in wl_resp.get("fields", {}).get("devices", {}).get("arrayValue", {}).get("values", [])])
-    except:
-        whitelist = set()
-    try:
-        blk_resp = requests.get(f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/users/{uid}/config/blocked",
-                               headers={"Authorization": f"Bearer {token}"}).json()
-        blocked = set([d["stringValue"] for d in blk_resp.get("fields", {}).get("devices", {}).get("arrayValue", {}).get("values", [])])
-    except:
-        blocked = set()
-
-# ---------------- MAIN ----------------
-print("Logging into Firebase…")
+# ---------------- MAIN LOOP ----------------
+print("Connecting to CyberMonitor Cloud...")
 token, uid = login_and_get_token()
-print(f"Logged in as UID: {uid}")
+print(f"Agent Active. Monitoring host: {hostname}")
 
 while True:
     try:
-        load_config(token, uid)
         usb_list = get_usb_devices()
         current_serials = {d["serial"] for d in usb_list}
+        
+        # Detect new insertions
         new_devices = current_serials - known_devices
-        known_devices.update(current_serials)
-
-        # ---------------- STATUS ----------------
+        
+        # 1. Update Core Status & Heartbeat
+        timestamp_iso = datetime.utcnow().isoformat() + "Z"
         status_doc = {
             "fields": {
                 "online": {"booleanValue": True},
                 "machine": {"stringValue": hostname},
                 "active_user": {"stringValue": psutil.users()[0].name if psutil.users() else "UNKNOWN"},
-                "last_seen": {"integerValue": int(time.time())}
+                "last_seen": {"timestampValue": timestamp_iso}
             }
         }
         firestore_set(f"users/{uid}", status_doc, token)
 
-        # ---------------- USB STATUS ----------------
+        # 2. Update USB Status List
         device_array = []
         for dev in usb_list:
-            dev["whitelisted"] = dev["serial"] in whitelist
-            dev["blocked"] = dev["serial"] in blocked
             device_array.append({
                 "mapValue": {
                     "fields": {
@@ -109,34 +90,34 @@ while True:
                         "serial": {"stringValue": dev["serial"]},
                         "vendor": {"stringValue": dev["vendor"]},
                         "class": {"stringValue": dev["class"]},
-                        "whitelisted": {"booleanValue": dev["whitelisted"]},
-                        "blocked": {"booleanValue": dev["blocked"]}
+                        "blocked": {"booleanValue": False} # Logic for blocking goes here
                     }
                 }
             })
-        firestore_set(f"users/{uid}/status/usb_status", {"fields":{"usb_devices":{"arrayValue":{"values":device_array}}}}, token)
+        
+        firestore_set(f"users/{uid}/status/usb_status", 
+                     {"fields":{"usb_devices":{"arrayValue":{"values":device_array}}}}, token)
 
-        # ---------------- NEW DEVICE LOGS ----------------
+        # 3. Log and Trigger Alerts
         for dev in usb_list:
             if dev["serial"] in new_devices:
-                log = {
+                log_entry = {
                     "fields": {
-                        "device_serial": {"stringValue": dev["serial"]},
-                        "device_name": {"stringValue": dev["device_name"]},
-                        "machine": {"stringValue": hostname},
-                        "action": {"stringValue": "CONNECTED"},
-                        "rule": {"stringValue": "Detection Event"},
-                        "class": {"stringValue": "Mass Storage"},
-                        "timestamp": {"integerValue": int(time.time())},
-                        "severity": {"stringValue": "MEDIUM"}
+                        "message": {"stringValue": f"NEW DEVICE: {dev['device_name']} ({dev['serial']}) detected on {hostname}"},
+                        "timestamp": {"timestampValue": timestamp_iso},
+                        "severity": {"stringValue": "HIGH"},
+                        "send_email": {"booleanValue": True} # Flag for Firebase Cloud Function
                     }
                 }
-                firestore_add(f"users/{uid}/logs", log, token)
-                # Optionally: send email alert here using cloud function
+                firestore_add(f"users/{uid}/logs", log_entry, token)
+                print(f"!!! Alert: New Device {dev['serial']}")
 
-        print(f"Heartbeat sent at {datetime.now()}")
+        known_devices = current_serials
+        print(f"Heartbeat sent [{datetime.now().strftime('%H:%M:%S')}]")
 
     except Exception as e:
-        print("Error:", e)
+        print("Network Error:", e)
+        try: token, uid = login_and_get_token() # Re-auth on fail
+        except: pass
 
-    time.sleep(7)
+    time.sleep(5)
