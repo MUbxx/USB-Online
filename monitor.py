@@ -15,16 +15,11 @@ USER_PASSWORD = getpass("Password: ")
 
 hostname = socket.gethostname()
 wmi_obj = wmi.WMI()
-
-known_devices = set()
+known_serials = set()
 
 def login_and_get_token():
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={API_KEY}"
-    payload = {
-        "email": USER_EMAIL,
-        "password": USER_PASSWORD,
-        "returnSecureToken": True
-    }
+    payload = {"email": USER_EMAIL, "password": USER_PASSWORD, "returnSecureToken": True}
     r = requests.post(url, json=payload)
     r.raise_for_status()
     data = r.json()
@@ -40,35 +35,20 @@ def firestore_add(path, obj, token):
     headers = {"Authorization": f"Bearer {token}"}
     return requests.post(url, json=obj, headers=headers)
 
-def get_usb_devices():
+def get_external_usb_storage():
     devices = []
-
     try:
-        for dev in wmi_obj.Win32_PnPEntity():
-            if not dev.PNPClass:
-                continue
-
-            if "USB" not in dev.PNPClass:
-                continue
-
-            serial = getattr(dev, "SerialNumber", None)
-            if isinstance(serial, str):
-                serial = serial.strip()
-            else:
-                serial = "UNKNOWN"
-
+        # FILTER: Only get physical disks where the interface is USB
+        for disk in wmi_obj.Win32_DiskDrive(InterfaceType="USB"):
             devices.append({
-                "device_name": dev.Name or "Unknown USB Device",
-                "serial": serial,
-                "vendor": dev.Manufacturer or "Unknown",
-                "class": dev.PNPClass
+                "name": disk.Caption or "Unknown USB Drive",
+                "serial": (disk.SerialNumber or "NOSERIAL").strip(),
+                "vendor": disk.Manufacturer or "Generic",
+                "model": disk.Model or "External Storage"
             })
-
     except Exception as e:
-        print("USB detection error:", e)
-
+        print("Detection error:", e)
     return devices
-
 
 print("Connecting to cloud...")
 token, uid = login_and_get_token()
@@ -76,91 +56,60 @@ print("Connected successfully.")
 
 while True:
     try:
-        usb_list = get_usb_devices()
+        usb_list = get_external_usb_storage()
         current_serials = {d["serial"] for d in usb_list}
 
-        new_devices = current_serials - known_devices
-        removed_devices = known_devices - current_serials
+        new_devices = [d for d in usb_list if d["serial"] not in known_serials]
+        removed_serials = known_serials - current_serials
 
         timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
-        # ---------- HEARTBEAT ----------
-        status_doc = {
-            "fields": {
-                "machine": {"stringValue": hostname},
-                "active_user": {
-                    "stringValue": psutil.users()[0].name if psutil.users() else "UNKNOWN"
-                },
-                "last_seen": {"timestampValue": timestamp}
-            }
-        }
-
+        # 1. HEARTBEAT
+        status_doc = {"fields": {
+            "machine": {"stringValue": hostname},
+            "active_user": {"stringValue": psutil.users()[0].name if psutil.users() else "SYSTEM"},
+            "last_seen": {"timestampValue": timestamp}
+        }}
         firestore_set(f"users/{uid}", status_doc, token)
 
-        # ---------- USB LIST ----------
-        device_array = []
+        # 2. USB STATUS (Flattened for the Dashboard)
+        usb_values = []
         for dev in usb_list:
-            device_array.append({
-                "mapValue": {
-                    "fields": {
-                        "device_name": {"stringValue": dev["device_name"]},
-                        "serial": {"stringValue": dev["serial"]},
-                        "vendor": {"stringValue": dev["vendor"]},
-                        "class": {"stringValue": dev["class"]},
-                    }
-                }
-            })
+            usb_values.append({"mapValue": {"fields": {
+                "vendor": {"stringValue": dev["vendor"]},
+                "device_name": {"stringValue": dev["name"]},
+                "serial": {"stringValue": dev["serial"]}
+            }}})
+        
+        firestore_set(f"users/{uid}/status/usb_status", 
+                      {"fields": {"usb_devices": {"arrayValue": {"values": usb_values}}}}, token)
 
-        firestore_set(
-            f"users/{uid}/status/usb_status",
-            {"fields": {"usb_devices": {"arrayValue": {"values": device_array}}}},
-            token
-        )
+        # 3. LOG NEW CONNECTIONS
+        for dev in new_devices:
+            log = {"fields": {
+                "message": {"stringValue": f"FLASH DRIVE DETECTED: {dev['name']} ({dev['serial']})"},
+                "timestamp": {"timestampValue": timestamp},
+                "severity": {"stringValue": "HIGH"}
+            }}
+            firestore_add(f"users/{uid}/logs", log, token)
+            print(f"[+] Plugged: {dev['name']}")
 
-        # ---------- NEW DEVICES ----------
-        for dev in usb_list:
-            if dev["serial"] in new_devices:
+        # 4. LOG REMOVALS
+        for s in removed_serials:
+            log = {"fields": {
+                "message": {"stringValue": f"FLASH DRIVE REMOVED: {s}"},
+                "timestamp": {"timestampValue": timestamp},
+                "severity": {"stringValue": "INFO"}
+            }}
+            firestore_add(f"users/{uid}/logs", log, token)
+            print(f"[-] Unplugged: {s}")
 
-                log_entry = {
-                    "fields": {
-                        "message": {
-                            "stringValue": f"NEW USB DETECTED: {dev['device_name']} ({dev['serial']})"
-                        },
-                        "timestamp": {"timestampValue": timestamp},
-                        "severity": {"stringValue": "HIGH"},
-                        "send_email": {"booleanValue": True}
-                    }
-                }
-
-                firestore_add(f"users/{uid}/logs", log_entry, token)
-                print("[+] New USB attached:", dev["serial"])
-
-        # ---------- REMOVED DEVICES ----------
-        for serial in removed_devices:
-
-            log_entry = {
-                "fields": {
-                    "message": {
-                        "stringValue": f"USB REMOVED: {serial}"
-                    },
-                    "timestamp": {"timestampValue": timestamp},
-                    "severity": {"stringValue": "INFO"},
-                    "send_email": {"booleanValue": False}
-                }
-            }
-
-            firestore_add(f"users/{uid}/logs", log_entry, token)
-            print("[-] USB removed:", serial)
-
-        known_devices = current_serials
-
-        print("Heartbeat OK")
+        known_serials = current_serials
+        print("Heartbeat OK - Monitoring External USBs...")
 
     except Exception as e:
-        print("Error in monitoring loop:", e)
-        try:
-            token, uid = login_and_get_token()
-        except:
-            pass
+        print("Loop error:", e)
+        try: token, uid = login_and_get_token()
+        except: pass
 
     time.sleep(10)
