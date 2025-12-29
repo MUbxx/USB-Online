@@ -3,40 +3,60 @@ import socket
 import psutil
 import wmi
 import requests
+import ctypes
+import os
 from datetime import datetime, UTC
 from getpass import getpass
 
-# Configuration
+# Firebase Config
 API_KEY = "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k"
 PROJECT_ID = "cybermonitor-1ab3c"
 
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+if not is_admin():
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    print("ERROR: YOU MUST RUN THIS AS ADMINISTRATOR TO DETECT USBs.")
+    print("Right-click CMD/PowerShell and select 'Run as Administrator'.")
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    input("Press Enter to exit...")
+    os._exit(1)
+
 print("=== CyberMonitor Agent ===")
-USER_EMAIL = input("Enter your CyberMonitor email: ")
+USER_EMAIL = input("Email: ")
 USER_PASSWORD = getpass("Password: ")
 
-hostname = socket.gethostname()
 wmi_obj = wmi.WMI()
-known_serials = set()
+hostname = socket.gethostname()
 
-def login_and_get_token():
+def login():
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={API_KEY}"
-    payload = {"email": USER_EMAIL, "password": USER_PASSWORD, "returnSecureToken": True}
-    r = requests.post(url, json=payload)
+    r = requests.post(url, json={"email": USER_EMAIL, "password": USER_PASSWORD, "returnSecureToken": True})
     r.raise_for_status()
     return r.json()["idToken"], r.json()["localId"]
 
-def firestore_call(method, path, obj, token):
-    url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/{path}"
-    headers = {"Authorization": f"Bearer {token}"}
-    if method == "PATCH":
-        return requests.patch(url, json=obj, headers=headers)
-    return requests.post(url, json=obj, headers=headers)
+def update_cloud_status(token, uid, online_bool):
+    """Updates the main user document with online status and machine name."""
+    url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/users/{uid}?updateMask.fieldPaths=is_online&updateMask.fieldPaths=machine&updateMask.fieldPaths=last_seen"
+    payload = {
+        "fields": {
+            "is_online": {"booleanValue": online_bool},
+            "machine": {"stringValue": hostname},
+            "last_seen": {"stringValue": datetime.now(UTC).isoformat()}
+        }
+    }
+    requests.patch(url, json=payload, headers={"Authorization": f"Bearer {token}"})
 
-def get_external_usb_storage():
+def get_usb_storage():
+    """Detects storage drives using the 'USBSTOR' hardware ID pattern."""
     devices = []
     try:
         for disk in wmi_obj.Win32_DiskDrive():
-            # Targets physical external drives specifically
+            # USBSTOR is the hardware pattern for almost all external storage on Windows
             if "USBSTOR" in (disk.PNPDeviceID or ""):
                 devices.append({
                     "name": disk.Caption or "External Drive",
@@ -44,67 +64,38 @@ def get_external_usb_storage():
                     "vendor": disk.Manufacturer or "Generic"
                 })
     except Exception as e:
-        print("Detection error:", e)
+        print(f"Hardware Scan Error: {e}")
     return devices
 
-print("Connecting to cloud...")
-token, uid = login_and_get_token()
-print("Connected successfully. Monitoring for External USBs...")
+try:
+    token, uid = login()
+    update_cloud_status(token, uid, True)
+    print(f"Connected to {PROJECT_ID}. Monitoring...")
 
-while True:
-    try:
-        usb_list = get_external_usb_storage()
-        current_serials = {d["serial"] for d in usb_list}
+    while True:
+        usb_list = get_usb_storage()
         
-        new_devices = [d for d in usb_list if d["serial"] not in known_serials]
-        removed_serials = known_serials - current_serials
+        # 1. Update USB status list
+        usb_payload = {"fields": {"usb_devices": {"arrayValue": {"values": [
+            {"mapValue": {"fields": {
+                "device_name": {"stringValue": d["name"]},
+                "vendor": {"stringValue": d["vendor"]},
+                "serial": {"stringValue": d["serial"]}
+            }}} for d in usb_list
+        ]}}}}
+        requests.patch(f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/users/{uid}/status/usb_status", 
+                       json=usb_payload, headers={"Authorization": f"Bearer {token}"})
         
-        # Proper UTC Timestamp for 2025 standards
-        timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-
-        # 1. Heartbeat
-        status_doc = {"fields": {
-            "machine": {"stringValue": hostname},
-            "active_user": {"stringValue": psutil.users()[0].name if psutil.users() else "SYSTEM"},
-            "last_seen": {"stringValue": timestamp} # Sending as string for easier JS parsing
-        }}
-        firestore_call("PATCH", f"users/{uid}", status_doc, token)
-
-        # 2. USB Status
-        usb_values = [{"mapValue": {"fields": {
-            "vendor": {"stringValue": d["vendor"]},
-            "device_name": {"stringValue": d["name"]},
-            "serial": {"stringValue": d["serial"]}
-        }}} for d in usb_list]
+        # 2. Heartbeat (keeps 'Online' status fresh)
+        update_cloud_status(token, uid, True)
         
-        firestore_call("PATCH", f"users/{uid}/status/usb_status", 
-                       {"fields": {"usb_devices": {"arrayValue": {"values": usb_values}}}}, token)
+        print(f"Heartbeat OK - {len(usb_list)} drives found.")
+        time.sleep(10)
 
-        # 3. Logs
-        for dev in new_devices:
-            log = {"fields": {
-                "message": {"stringValue": f"CONNECTED: {dev['name']} ({dev['serial']})"},
-                "timestamp": {"timestampValue": timestamp},
-                "severity": {"stringValue": "HIGH"}
-            }}
-            firestore_call("POST", f"users/{uid}/logs", log, token)
-            print(f"[+] Plugged: {dev['name']}")
-
-        for s in removed_serials:
-            log = {"fields": {
-                "message": {"stringValue": f"REMOVED: {s}"},
-                "timestamp": {"timestampValue": timestamp},
-                "severity": {"stringValue": "INFO"}
-            }}
-            firestore_call("POST", f"users/{uid}/logs", log, token)
-            print(f"[-] Unplugged: {s}")
-
-        known_serials = current_serials
-        print("Heartbeat OK")
-
-    except Exception as e:
-        print("Loop error:", e)
-        try: token, uid = login_and_get_token()
-        except: pass
-
-    time.sleep(10)
+except Exception as e:
+    print(f"Fatal Error: {e}")
+finally:
+    # This block triggers when the script stops or is closed
+    if 'token' in locals() and 'uid' in locals():
+        print("Sending Offline signal...")
+        update_cloud_status(token, uid, False)
