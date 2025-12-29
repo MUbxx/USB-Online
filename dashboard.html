@@ -13,12 +13,13 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <style>
-body { background:#0b1220; font-family:'Inter',sans-serif; color:#e5e7eb; }
-.card { background:#101a33; border:1px solid #1e2b4d; border-radius:16px; }
-.indicator-online{ background:#16a34a; box-shadow:0 0 10px #16a34a; }
-.indicator-offline{ background:#dc2626; box-shadow:0 0 10px #dc2626; }
-.toast{ position:fixed; right:25px; bottom:25px; background:#1e293b; color:white; padding:12px 20px; border-radius:12px; border:1px solid #3b82f6; z-index:100; animation:slideIn .3s ease; }
-@keyframes slideIn{ from{transform:translateX(100%);opacity:0;} to{transform:translateX(0);opacity:1;} }
+body{background:#0b1220;font-family:'Inter',sans-serif;color:#e5e7eb;}
+.card{background:#101a33;border:1px solid #1e2b4d;border-radius:16px;}
+.indicator-online{background:#16a34a;box-shadow:0 0 10px #16a34a;}
+.indicator-offline{background:#dc2626;box-shadow:0 0 10px #dc2626;}
+.toast{position:fixed;right:25px;bottom:25px;background:#1e293b;color:white;
+padding:12px 20px;border-radius:12px;border:1px solid #3b82f6;z-index:100;animation:slideIn .3s ease;}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0;}to{transform:translateX(0);opacity:1;}}
 </style>
 </head>
 
@@ -27,11 +28,12 @@ body { background:#0b1220; font-family:'Inter',sans-serif; color:#e5e7eb; }
 <!-- SIDEBAR -->
 <div class="w-64 bg-[#101a33] flex flex-col p-5 border-r border-gray-800">
     <h1 class="text-2xl font-bold mb-10 text-blue-500">CyberMonitor</h1>
+
     <ul class="flex flex-col gap-4 text-gray-400">
         <li><button onclick="showSection('dashboardSection')" class="w-full text-left px-4 py-2 rounded hover:bg-blue-600 hover:text-white transition">Dashboard</button></li>
         <li><button onclick="showSection('usbSection')" class="w-full text-left px-4 py-2 rounded hover:bg-blue-600 hover:text-white transition">USB Devices</button></li>
         <li><button onclick="showSection('logsSection')" class="w-full text-left px-4 py-2 rounded hover:bg-blue-600 hover:text-white transition">Security Logs</button></li>
-        <li><button onclick="toggleProfile()" class="w-full text-left px-4 py-2 rounded hover:bg-blue-600 hover:text-white transition">Modify Profile</button></li>
+        <li><button onclick="toggleProfile()" class="w-full text-left px-4 py-2 rounded hover:bg-blue-600 hover:text-white transition">Profile</button></li>
     </ul>
 
     <button onclick="logout()" class="mt-auto w-full bg-red-600/10 text-red-500 border border-red-600/30 hover:bg-red-600 hover:text-white rounded py-2 transition text-sm">Sign Out</button>
@@ -40,11 +42,12 @@ body { background:#0b1220; font-family:'Inter',sans-serif; color:#e5e7eb; }
 <!-- MAIN CONTENT -->
 <div class="flex-1 p-10 overflow-y-auto">
 
-    <!-- DASHBOARD SECTION -->
+    <!-- DASHBOARD -->
     <div id="dashboardSection" class="space-y-8">
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
+            <!-- Status -->
             <div class="card p-6">
                 <p class="text-gray-500 text-xs font-bold uppercase">Status</p>
                 <div class="flex items-center gap-3 mt-3">
@@ -53,22 +56,41 @@ body { background:#0b1220; font-family:'Inter',sans-serif; color:#e5e7eb; }
                 </div>
             </div>
 
+            <!-- Logged in name -->
             <div class="card p-6">
-                <p class="text-gray-500 text-xs font-bold uppercase">Active User</p>
+                <p class="text-gray-500 text-xs font-bold uppercase">Account Name</p>
+                <p id="accountName" class="text-xl font-bold mt-2">...</p>
+            </div>
+
+            <!-- Active User -->
+            <div class="card p-6">
+                <p class="text-gray-500 text-xs font-bold uppercase">Active System User</p>
                 <p id="activeUser" class="text-xl font-bold mt-2">...</p>
             </div>
 
+            <!-- Agent download -->
             <div class="card p-6">
-                <p class="text-gray-500 text-xs font-bold uppercase">Host Machine</p>
-                <p id="activeHost" class="text-xl font-bold mt-2">...</p>
-            </div>
+                <p class="text-gray-500 text-xs font-bold uppercase">Agent Files</p>
 
-            <div class="card p-6">
-                <p class="text-gray-500 text-xs font-bold uppercase">Agent Setup</p>
-                <p class="text-xs mt-2 text-gray-400">Run the Python agent on target machine.</p>
+                <div class="flex gap-2 mt-3">
+                    <a href="monitor.py" download class="flex-1 text-center bg-blue-600 py-1.5 rounded text-xs font-bold hover:bg-blue-500 transition">Python Agent</a>
+
+                    <a href="install.bat" download class="flex-1 text-center bg-green-600 py-1.5 rounded text-xs font-bold hover:bg-green-500 transition">Windows Installer</a>
+                </div>
+
+                <p class="text-[10px] mt-2 opacity-60">
+                    Run agent on the machine to be monitored.
+                </p>
             </div>
 
         </div>
+
+        <!-- Host Machine -->
+        <div class="card p-6 w-full">
+            <p class="text-gray-500 text-xs font-bold uppercase">Host Machine</p>
+            <p id="activeHost" class="text-xl font-bold mt-2">...</p>
+        </div>
+
     </div>
 
     <!-- USB DEVICES -->
@@ -93,32 +115,41 @@ body { background:#0b1220; font-family:'Inter',sans-serif; color:#e5e7eb; }
         <h2 class="text-xl font-bold mb-4">Security Logs</h2>
         <div id="logBox" class="h-80 overflow-y-auto bg-black/40 rounded-lg p-5 font-mono text-xs text-blue-300 space-y-2"></div>
     </div>
-
 </div>
 
 <!-- PROFILE MODAL -->
 <div id="profileModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-md flex justify-center items-center z-50">
-    <div class="card p-8 w-[400px]">
-        <h2 class="text-2xl font-bold mb-6">Profile Settings</h2>
+    <div class="card p-8 w-[420px]">
+
+        <h2 class="text-2xl font-bold mb-6">Profile</h2>
 
         <div class="space-y-5">
+
+            <div>
+                <label class="text-xs text-gray-500 uppercase font-bold">Email (read-only)</label>
+                <input id="profileEmail" disabled class="w-full bg-black/50 border border-gray-700 rounded-lg p-3 mt-1 opacity-60 cursor-not-allowed">
+            </div>
+
             <div>
                 <label class="text-xs text-gray-500 uppercase font-bold">First Name</label>
                 <input id="editFirstName" class="w-full bg-black/50 border border-gray-700 rounded-lg p-3 mt-1">
             </div>
+
             <div>
                 <label class="text-xs text-gray-500 uppercase font-bold">Last Name</label>
                 <input id="editLastName" class="w-full bg-black/50 border border-gray-700 rounded-lg p-3 mt-1">
             </div>
+
             <div>
                 <label class="text-xs text-gray-500 uppercase font-bold">Phone</label>
                 <input id="editPhone" class="w-full bg-black/50 border border-gray-700 rounded-lg p-3 mt-1">
             </div>
+
         </div>
 
         <div class="flex gap-4 mt-8">
             <button onclick="saveProfile()" class="flex-1 bg-blue-600 hover:bg-blue-500 py-3 rounded-lg font-bold">Save</button>
-            <button onclick="toggleProfile()" class="flex-1 bg-gray-800 py-3 rounded-lg">Cancel</button>
+            <button onclick="toggleProfile()" class="flex-1 bg-gray-800 py-3 rounded-lg">Close</button>
         </div>
     </div>
 </div>
@@ -135,6 +166,7 @@ const firebaseConfig={
  messagingSenderId:"569408987884",
  appId:"1:569408987884:web:0839eb7932c206fc157bc9"
 };
+
 firebase.initializeApp(firebaseConfig);
 
 const auth=firebase.auth();
@@ -142,12 +174,18 @@ const db=firebase.firestore();
 
 let uid=null;
 
-/* ---------- AUTH WATCH ---------- */
+/* ---------- AUTH ---------- */
 auth.onAuthStateChanged(user=>{
-    if(!user){ window.location.href="login.html"; return; }
-    if(!user.emailVerified) showToast("Verify your email to fully enable alerts");
+    if(!user){
+        window.location.href="login.html";
+        return;
+    }
 
     uid=user.uid;
+
+    document.getElementById("profileEmail").value=user.email;
+    document.getElementById("accountName").innerText=user.email.split("@")[0];
+
     startApp();
 });
 
@@ -162,17 +200,15 @@ function listenToStatus(){
     db.collection("users").doc(uid).onSnapshot(doc=>{
         const d=doc.data(); if(!d) return;
 
-        document.getElementById("activeUser").innerText=d.active_user||"N/A";
-        document.getElementById("activeHost").innerText=d.machine||"N/A";
+        activeUser.innerText=d.active_user||"N/A";
+        activeHost.innerText=d.machine||"N/A";
 
-        if(!document.getElementById("editFirstName").value){
-            editFirstName.value=d.first_name||"";
-            editLastName.value=d.last_name||"";
-            editPhone.value=d.phone||"";
-        }
+        editFirstName.value=d.first_name||"";
+        editLastName.value=d.last_name||"";
+        editPhone.value=d.phone||"";
 
         const last=d.last_seen?d.last_seen.toMillis():0;
-        const online=(Date.now()-last)<15000;
+        const online=(Date.now()-last)<20000;
 
         connectionDot.className=online?
             "w-3 h-3 rounded-full indicator-online":
@@ -184,28 +220,29 @@ function listenToStatus(){
 
 /* ---------- SAVE PROFILE ---------- */
 async function saveProfile(){
-    await db.collection("users").doc(uid).update({
+    await db.collection("users").doc(uid).set({
         first_name:editFirstName.value,
         last_name:editLastName.value,
         phone:editPhone.value
-    });
-    toggleProfile();
+    },{merge:true});
+
     showToast("Profile updated");
 }
 
-/* ---------- USB LIST ---------- */
+/* ---------- USB DEVICES ---------- */
 function listenToDevices(){
     db.collection("users").doc(uid).collection("status").doc("usb_status")
     .onSnapshot(doc=>{
         const list=doc.data()?.usb_devices||[];
-        const tbody=document.getElementById("deviceTable");
+        const tbody=deviceTable;
         tbody.innerHTML="";
 
         list.forEach(d=>{
-            const data=d.mapValue.fields;
-            const vendor=data.vendor.stringValue;
-            const name=data.device_name.stringValue;
-            const serial=data.serial.stringValue;
+            const f=d.mapValue.fields;
+
+            const vendor=f.vendor.stringValue;
+            const name=f.device_name.stringValue;
+            const serial=f.serial.stringValue;
 
             tbody.innerHTML+=`
             <tr>
@@ -213,11 +250,13 @@ function listenToDevices(){
                     <br><span class="text-xs text-gray-500">${name}</span>
                 </td>
                 <td class="py-4 font-mono text-xs">${serial}</td>
+
                 <td class="py-4">
-                    <span class="text-green-500 text-xs px-2 py-1 bg-green-500/10 rounded border border-green-500/20">
-                        Active
+                    <span class="text-green-400 text-xs px-2 py-1 bg-green-500/10 rounded border border-green-500/20">
+                        Connected
                     </span>
                 </td>
+
                 <td class="py-4">
                     <button onclick="allowDevice('${serial}')" class="text-green-400 text-xs mr-3">Allow</button>
                     <button onclick="blockDevice('${serial}')" class="text-red-400 text-xs">Block</button>
@@ -227,7 +266,7 @@ function listenToDevices(){
     });
 }
 
-/* ---------- POLICY ACTIONS ---------- */
+/* ---------- POLICY ---------- */
 async function allowDevice(serial){
     await db.collection("users").doc(uid).collection("status").doc("policy")
     .set({allowed:firebase.firestore.FieldValue.arrayUnion(serial)},{merge:true});
@@ -243,35 +282,30 @@ async function blockDevice(serial){
 /* ---------- LOGS ---------- */
 function listenToLogs(){
     db.collection("users").doc(uid).collection("logs")
-    .orderBy("timestamp","desc").limit(20)
+    .orderBy("timestamp","desc").limit(25)
     .onSnapshot(snap=>{
-        const box=document.getElementById("logBox");
-        box.innerHTML="";
+        logBox.innerHTML="";
         snap.forEach(doc=>{
             const l=doc.data();
             const t=l.timestamp?l.timestamp.toDate().toLocaleTimeString():"...";
-            box.innerHTML+=`<p><span class="opacity-40">[${t}]</span> ${l.message}</p>`;
+            logBox.innerHTML+=`<p><span class="opacity-40">[${t}]</span> ${l.message}</p>`;
         });
     });
 }
 
-/* ---------- UI HELPERS ---------- */
+/* ---------- UI ---------- */
 function showSection(id){
     ["dashboardSection","usbSection","logsSection"].forEach(s=>document.getElementById(s).classList.add("hidden"));
     document.getElementById(id).classList.remove("hidden");
 }
-
-function toggleProfile(){ profileModal.classList.toggle("hidden"); }
-
-function showToast(msg){
+function toggleProfile(){profileModal.classList.toggle("hidden");}
+function logout(){auth.signOut();}
+function showToast(m){
     const t=document.createElement("div");
-    t.className="toast"; t.innerText=msg;
-    document.getElementById("toastContainer").appendChild(t);
+    t.className="toast";t.innerText=m;
+    toastContainer.appendChild(t);
     setTimeout(()=>t.remove(),3000);
 }
-
-function logout(){ auth.signOut(); }
-
 </script>
 </body>
 </html>
