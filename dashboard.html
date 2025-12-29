@@ -2,219 +2,115 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CyberMonitor Dashboard</title>
-
     <script src="https://cdn.tailwindcss.com"></script>
-
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-
     <style>
-        body { background: #0b1220; font-family: 'Inter', sans-serif; color: #e5e7eb; }
-        .card { background: #101a33; border: 1px solid #1e2b4d; border-radius: 16px; }
-        .indicator-online { background: #16a34a; box-shadow: 0 0 10px #16a34a; }
-        .indicator-offline { background: #dc2626; box-shadow: 0 0 10px #dc2626; }
-        .nav-btn { width: 100%; text-align: left; padding: 0.75rem; border-radius: 8px; transition: 0.2s; }
-        .nav-btn:hover { background: #1e2b4d; }
+        body { background: #0b1220; color: #e5e7eb; font-family: sans-serif; }
+        .card { background: #101a33; border: 1px solid #1e2b4d; border-radius: 12px; padding: 20px; }
+        .dot-online { background: #16a34a; box-shadow: 0 0 8px #16a34a; }
+        .dot-offline { background: #dc2626; box-shadow: 0 0 8px #dc2626; }
     </style>
 </head>
+<body class="p-10">
+    <div class="max-w-6xl mx-auto">
+        <div class="flex justify-between items-center mb-10">
+            <h1 class="text-3xl font-bold text-blue-400">CyberMonitor Control Panel</h1>
+            <button onclick="auth.signOut()" class="text-red-400 hover:underline">Logout</button>
+        </div>
 
-<body class="flex h-screen">
-
-<div class="w-64 bg-[#101a33] p-5 flex flex-col border-r border-gray-800">
-    <h1 class="text-2xl font-bold text-blue-400 mb-10 text-center">CyberMonitor</h1>
-
-    <button onclick="showSection('dashboard')" class="nav-btn mb-2">📊 Dashboard</button>
-    <button onclick="showSection('usb')" class="nav-btn mb-2">🔌 USB Devices</button>
-    <button onclick="showSection('logs')" class="nav-btn mb-2">📜 Logs</button>
-
-    <button onclick="auth.signOut()" class="mt-auto text-red-500 font-semibold p-2 hover:bg-red-500/10 rounded-lg transition">🚪 Logout</button>
-</div>
-
-<div class="flex-1 p-10 overflow-y-auto">
-
-    <div id="dashboard">
-        <h2 class="text-2xl font-bold mb-6">System Overview</h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-            <div class="card p-6">
-                <p class="text-gray-400 text-sm uppercase">Agent Status</p>
-                <div class="flex items-center gap-3 mt-2">
-                    <span id="connDot" class="w-3 h-3 rounded-full indicator-offline"></span>
-                    <span id="connText" class="font-bold text-lg">Checking...</span>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <div class="card">
+                <p class="text-sm text-gray-400">Agent Status</p>
+                <div class="flex items-center gap-2 mt-2">
+                    <span id="connDot" class="w-3 h-3 rounded-full dot-offline"></span>
+                    <span id="connText" class="font-bold">Offline</span>
                 </div>
             </div>
-
-            <div class="card p-6">
-                <p class="text-gray-400 text-sm uppercase">Logged In Account</p>
-                <h2 id="accountName" class="text-xl font-bold mt-2 truncate">...</h2>
+            <div class="card">
+                <p class="text-sm text-gray-400">System User</p>
+                <div id="sysUser" class="text-xl font-bold mt-2">...</div>
             </div>
-
-            <div class="card p-6">
-                <p class="text-gray-400 text-sm uppercase">PC Active User</p>
-                <h2 id="sysUser" class="text-xl font-bold mt-2">...</h2>
+            <div class="card">
+                <p class="text-sm text-gray-400">Active Account</p>
+                <div id="accEmail" class="text-xl font-bold mt-2 truncate">...</div>
             </div>
-
         </div>
 
-        <div class="mt-8 card p-6 w-fit">
-            <h3 class="text-lg font-bold mb-4 text-blue-300">Quick Links</h3>
-            <div class="flex gap-4">
-                <a href="monitor.py" download class="bg-blue-600 px-4 py-2 rounded text-sm hover:bg-blue-700">Download Agent (.py)</a>
-                <a href="install.bat" download class="bg-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-600">Download Installer (.bat)</a>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+            <div class="card">
+                <h2 class="text-xl font-bold mb-4 border-b border-gray-700 pb-2">Detected USB Storage</h2>
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="text-gray-500 text-sm">
+                            <th>Vendor</th>
+                            <th>Device</th>
+                            <th>Serial</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usbTable"></tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2 class="text-xl font-bold mb-4 border-b border-gray-700 pb-2">Security Logs</h2>
+                <div id="logBox" class="h-64 overflow-y-auto text-sm font-mono space-y-1"></div>
             </div>
         </div>
     </div>
 
-    <div id="usb" class="hidden">
-        <h2 class="text-2xl font-bold mb-6">Connected USB Storage</h2>
-        <div class="card p-6">
-            <table class="w-full text-left">
-                <thead>
-                    <tr class="text-gray-400 border-b border-gray-700">
-                        <th class="pb-3">Manufacturer</th>
-                        <th class="pb-3">Device Name</th>
-                        <th class="pb-3 text-right">Serial Number</th>
-                    </tr>
-                </thead>
-                <tbody id="usbTable" class="divide-y divide-gray-800">
-                    </tbody>
-            </table>
-        </div>
-    </div>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
+            authDomain: "cybermonitor-1ab3c.firebaseapp.com",
+            projectId: "cybermonitor-1ab3c",
+            storageBucket: "cybermonitor-1ab3c.appspot.com",
+            messagingSenderId: "569408987884",
+            appId: "1:569408987884:web:0839eb7932c206fc157bc9"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
 
-    <div id="logs" class="hidden">
-        <h2 class="text-2xl font-bold mb-6">Security Logs</h2>
-        <div class="card p-6">
-            <div id="logBox" class="h-96 overflow-y-auto space-y-2 font-mono text-sm">
-                </div>
-        </div>
-    </div>
-
-</div>
-
-<script>
-// --- Firebase Configuration ---
-const firebaseConfig = {
-    apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
-    authDomain: "cybermonitor-1ab3c.firebaseapp.com",
-    projectId: "cybermonitor-1ab3c",
-    storageBucket: "cybermonitor-1ab3c.appspot.com",
-    messagingSenderId: "569408987884",
-    appId: "1:569408987884:web:0839eb7932c206fc157bc9"
-};
-
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
-
-let uid = null;
-
-// --- Auth Observer ---
-auth.onAuthStateChanged(user => {
-    if (!user) {
-        window.location = "login.html";
-        return;
-    }
-
-    uid = user.uid;
-    document.getElementById("accountName").innerText = user.email;
-
-    // Start Real-time listeners
-    loadStatus();
-    loadUSB();
-    loadLogs();
-});
-
-// --- Load Heartbeat & Machine Status ---
-function loadStatus() {
-    db.collection("users").doc(uid).onSnapshot(doc => {
-        const d = doc.data();
-        if (!d) return;
-
-        document.getElementById("sysUser").innerText = d.active_user || "UNKNOWN";
-
-        // Handle Firestore Timestamp or ISO String
-        let lastSeen;
-        if (d.last_seen && d.last_seen.toDate) {
-            lastSeen = d.last_seen.toDate();
-        } else {
-            lastSeen = new Date(d.last_seen);
-        }
-
-        const now = new Date();
-        const diff = (now - lastSeen) / 1000; // in seconds
-
-        // Agent is "Online" if it reported in the last 35 seconds
-        const online = diff < 35;
-
-        document.getElementById("connDot").className = 
-            online ? "w-3 h-3 rounded-full indicator-online" : "w-3 h-3 rounded-full indicator-offline";
-        
-        document.getElementById("connText").innerText = 
-            online ? "Agent Online" : "Agent Offline";
-        document.getElementById("connText").className = 
-            online ? "font-bold text-lg text-green-500" : "font-bold text-lg text-red-500";
-    });
-}
-
-// --- Load USB Devices (Fixed for external filtering) ---
-function loadUSB() {
-    db.collection("users").doc(uid).collection("status").doc("usb_status")
-    .onSnapshot(doc => {
-        const data = doc.data();
-        const list = data?.usb_devices || [];
-        const t = document.getElementById("usbTable");
-        t.innerHTML = "";
-
-        if (list.length === 0) {
-            t.innerHTML = `<tr><td colspan="3" class="py-10 text-center text-gray-500">No external drives connected.</td></tr>`;
-            return;
-        }
-
-        list.forEach(dev => {
-            t.innerHTML += `
-            <tr class="hover:bg-white/5 transition">
-                <td class="py-4 text-gray-400">${dev.vendor || "Generic"}</td>
-                <td class="py-4 font-semibold text-white">${dev.device_name || "Mass Storage"}</td>
-                <td class="py-4 text-right font-mono text-blue-400 text-xs">${dev.serial || "N/A"}</td>
-            </tr>`;
-        });
-    });
-}
-
-// --- Load Security Logs ---
-function loadLogs() {
-    db.collection("users").doc(uid).collection("logs")
-    .orderBy("timestamp", "desc").limit(50)
-    .onSnapshot(snapshot => {
-        const box = document.getElementById("logBox");
-        box.innerHTML = "";
-
-        snapshot.forEach(doc => {
-            const d = doc.data();
-            const timeStr = d.timestamp?.toDate ? d.timestamp.toDate().toLocaleTimeString() : "...";
-            const color = d.severity === "HIGH" ? "text-red-400" : "text-gray-400";
+        auth.onAuthStateChanged(user => {
+            if (!user) { window.location = "login.html"; return; }
+            document.getElementById("accEmail").innerText = user.email;
             
-            box.innerHTML += `
-            <div class="border-l-2 border-gray-700 pl-3 py-1">
-                <span class="text-blue-500">[${timeStr}]</span> 
-                <span class="${color}">${d.message}</span>
-            </div>`;
+            // Listen for Machine Status
+            db.collection("users").doc(user.uid).onSnapshot(doc => {
+                const data = doc.data();
+                if (!data) return;
+                document.getElementById("sysUser").innerText = data.active_user;
+                const lastSeen = new Date(data.last_seen);
+                const isOnline = (new Date() - lastSeen) < 40000;
+                document.getElementById("connDot").className = isOnline ? "w-3 h-3 rounded-full dot-online" : "w-3 h-3 rounded-full dot-offline";
+                document.getElementById("connText").innerText = isOnline ? "Online" : "Offline";
+            });
+
+            // Listen for USBs
+            db.collection("users").doc(user.uid).collection("status").doc("usb_status").onSnapshot(doc => {
+                const list = doc.data()?.usb_devices || [];
+                const t = document.getElementById("usbTable");
+                t.innerHTML = list.map(d => `
+                    <tr class="border-b border-gray-800">
+                        <td class="py-2 text-gray-400">${d.vendor}</td>
+                        <td class="py-2 font-bold">${d.device_name}</td>
+                        <td class="py-2 text-blue-400 text-xs">${d.serial}</td>
+                    </tr>
+                `).join('') || '<tr><td colspan="3" class="py-4 text-center text-gray-600">No drives found</td></tr>';
+            });
+
+            // Listen for Logs
+            db.collection("users").doc(user.uid).collection("logs").orderBy("timestamp", "desc").limit(20).onSnapshot(s => {
+                document.getElementById("logBox").innerHTML = s.docs.map(doc => {
+                    const d = doc.data();
+                    const color = d.severity === "HIGH" ? "text-red-400" : "text-gray-400";
+                    return `<p><span class="text-blue-500">[LOG]</span> <span class="${color}">${d.message}</span></p>`;
+                }).join('');
+            });
         });
-    });
-}
-
-// --- Section Toggler ---
-function showSection(id) {
-    ["dashboard", "usb", "logs"].forEach(section => {
-        document.getElementById(section).classList.add("hidden");
-    });
-    document.getElementById(id).classList.remove("hidden");
-}
-
-</script>
+    </script>
 </body>
 </html>
