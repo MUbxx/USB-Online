@@ -1,35 +1,21 @@
-import time
-import socket
-import psutil
-import wmi
-import requests
-import ctypes
 import os
 import sys
+import time
+import socket
+import requests
 from datetime import datetime, UTC
 from getpass import getpass
+from usbmonitor import USBMonitor
+from usbmonitor.attributes import ID_MODEL, ID_SERIAL, ID_VENDOR
 
-# Firebase Configuration
+# --- CONFIGURATION ---
 API_KEY = "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k"
 PROJECT_ID = "cybermonitor-1ab3c"
 
-def is_admin():
-    try:
-        return ctypes.windll.shell32.IsUserAnAdmin()
-    except:
-        return False
-
-# Self-elevate to Admin if not already
-if not is_admin():
-    print("Elevating to Administrator for hardware access...")
-    ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
-    os._exit(0)
-
-print("=== CyberMonitor Agent v3.0 (EXE Ready) ===")
-USER_EMAIL = input("Enter CyberMonitor Email: ")
+print("=== CyberMonitor Agent v4.0 (Event-Driven) ===")
+USER_EMAIL = input("Email: ")
 USER_PASSWORD = getpass("Password: ")
 
-wmi_obj = wmi.WMI()
 hostname = socket.gethostname()
 
 def login():
@@ -38,78 +24,75 @@ def login():
     r.raise_for_status()
     return r.json()["idToken"], r.json()["localId"]
 
-def set_cloud_status(token, uid, online_bool):
+def update_cloud_state(token, uid, is_online):
+    """Updates the heartbeat and online status."""
     url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/users/{uid}"
     payload = {"fields": {
-        "is_online": {"booleanValue": online_bool},
+        "is_online": {"booleanValue": is_online},
         "machine": {"stringValue": hostname},
         "last_seen": {"stringValue": datetime.now(UTC).isoformat()}
     }}
     requests.patch(url, json=payload, headers={"Authorization": f"Bearer {token}"})
 
-def scan_usbs():
-    devices = []
-    try:
-        for disk in wmi_obj.Win32_DiskDrive():
-            if "USBSTOR" in (disk.PNPDeviceID or ""):
-                devices.append({
-                    "name": disk.Caption or "External Drive",
-                    "serial": (disk.SerialNumber or "UNKNOWN").strip(),
-                    "id": disk.PNPDeviceID
-                })
-    except: pass
-    return devices
+def log_event(token, uid, message, severity):
+    """Sends a security log to the cloud."""
+    url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/users/{uid}/logs"
+    payload = {"fields": {
+        "message": {"stringValue": message},
+        "timestamp": {"timestampValue": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")},
+        "severity": {"stringValue": severity}
+    }}
+    requests.post(url, json=payload, headers={"Authorization": f"Bearer {token}"})
+
+def sync_usb_list(token, uid, monitor):
+    """Syncs the currently connected devices to the dashboard."""
+    devices = monitor.get_available_devices()
+    usb_values = []
+    for dev_id, info in devices.items():
+        usb_values.append({"mapValue": {"fields": {
+            "device_name": {"stringValue": info.get(ID_MODEL, "Unknown")},
+            "serial": {"stringValue": info.get(ID_SERIAL, "N/A")},
+            "vendor": {"stringValue": info.get(ID_VENDOR, "Generic")}
+        }}})
+    
+    url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/users/{uid}/status/usb_status"
+    requests.patch(url, json={"fields": {"usb_devices": {"arrayValue": {"values": usb_values}}}}, 
+                   headers={"Authorization": f"Bearer {token}"})
+
+# --- CALLBACKS (The 'Eric-Canas' Logic) ---
+def on_connect(device_id, device_info):
+    msg = f"CONNECTED: {device_info.get(ID_MODEL)} (SN: {device_info.get(ID_SERIAL)})"
+    print(f"[+] {msg}")
+    log_event(global_token, global_uid, msg, "HIGH")
+    sync_usb_list(global_token, global_uid, monitor)
+
+def on_disconnect(device_id, device_info):
+    msg = f"REMOVED: {device_info.get(ID_MODEL)} (ID: {device_id.split('/')[-1]})"
+    print(f"[-] {msg}")
+    log_event(global_token, global_uid, msg, "INFO")
+    sync_usb_list(global_token, global_uid, monitor)
 
 try:
-    token, uid = login()
-    set_cloud_status(token, uid, True)
-    print("Agent Online. Monitoring hardware...")
-
-    known_ids = {d['id'] for d in scan_usbs()}
-
+    global_token, global_uid = login()
+    monitor = USBMonitor()
+    
+    # Start the background daemon
+    monitor.start_monitoring(on_connect=on_connect, on_disconnect=on_disconnect)
+    
+    # Mark Online
+    update_cloud_state(global_token, global_uid, True)
+    sync_usb_list(global_token, global_uid, monitor)
+    
+    print("Security Daemon Active. Press Ctrl+C to stop.")
+    
     while True:
-        current_list = scan_usbs()
-        current_ids = {d['id'] for d in current_list}
+        # Keep main thread alive and update heartbeat
+        update_cloud_state(global_token, global_uid, True)
+        time.sleep(30)
 
-        # Check for NEW connections
-        for dev in current_list:
-            if dev['id'] not in known_ids:
-                print(f"[+] PLUGGED: {dev['name']}")
-                # Log to Firestore
-                log_url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/users/{uid}/logs"
-                requests.post(log_url, json={"fields": {
-                    "message": {"stringValue": f"CONNECTED: {dev['name']} (SN: {dev['serial']})"},
-                    "timestamp": {"timestampValue": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")},
-                    "severity": {"stringValue": "HIGH"}
-                }}, headers={"Authorization": f"Bearer {token}"})
-
-        # Check for REMOVALS
-        for dev_id in known_ids:
-            if dev_id not in current_ids:
-                print(f"[-] REMOVED: {dev_id}")
-                # Log removal
-                log_url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/users/{uid}/logs"
-                requests.post(log_url, json={"fields": {
-                    "message": {"stringValue": f"REMOVED DEVICE: {dev_id.split('\\')[-1]}"},
-                    "timestamp": {"timestampValue": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")},
-                    "severity": {"stringValue": "INFO"}
-                }}, headers={"Authorization": f"Bearer {token}"})
-
-        known_ids = current_ids
-        
-        # Update live list and heartbeat
-        usb_payload = {"fields": {"usb_devices": {"arrayValue": {"values": [
-            {"mapValue": {"fields": {"device_name": {"stringValue": d["name"]}, "serial": {"stringValue": d["serial"]}}}} for d in current_list
-        ]}}}}
-        requests.patch(f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/users/{uid}/status/usb_status", 
-                       json=usb_payload, headers={"Authorization": f"Bearer {token}"})
-        
-        set_cloud_status(token, uid, True)
-        time.sleep(5)
-
-except Exception as e:
-    print(f"Error: {e}")
+except KeyboardInterrupt:
+    print("\nStopping Agent...")
 finally:
-    if 'token' in locals():
-        set_cloud_status(token, uid, False)
-        print("Agent Offline.")
+    if 'global_token' in locals():
+        update_cloud_state(global_token, global_uid, False)
+        monitor.stop_monitoring()
