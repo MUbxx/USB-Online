@@ -8,44 +8,30 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
-<body class="bg-[#0b1220] text-gray-200 min-h-screen p-6">
+<body class="bg-[#0b1220] text-gray-200 p-6">
 
-    <div class="max-w-5xl mx-auto">
-        <div class="flex justify-between items-center mb-8 bg-[#101a33] p-6 rounded-2xl border border-gray-800 shadow-2xl">
+    <div class="max-w-5xl mx-auto space-y-6">
+        <div class="bg-[#101a33] p-6 rounded-2xl border border-gray-800 flex justify-between items-center">
             <div>
-                <h1 class="text-3xl font-black text-blue-500 tracking-tighter">CYBERMONITOR v2.0</h1>
-                <p id="machineDisplay" class="text-gray-500 text-sm font-mono mt-1 italic">Waiting for agent...</p>
+                <h1 class="text-2xl font-bold text-blue-500">CYBERMONITOR DASHBOARD</h1>
+                <p id="machineDisplay" class="text-xs text-gray-500 font-mono">Status: Initializing...</p>
             </div>
-            <div class="text-right">
-                <div id="statusBadge" class="inline-flex items-center px-4 py-1 rounded-full border border-red-900 bg-red-900/20 text-red-500 font-bold text-xs uppercase mb-2">
-                    <span id="statusDot" class="w-2 h-2 rounded-full bg-red-500 mr-2"></span>
-                    <span id="statusText">Agent Offline</span>
-                </div>
-                <br>
-                <button onclick="auth.signOut()" class="text-xs text-gray-500 hover:text-white transition underline">Sign Out</button>
-            </div>
+            <div id="statusIndicator" class="px-4 py-1 rounded-full bg-red-900/20 text-red-500 border border-red-800 text-xs font-bold">OFFLINE</div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <div class="bg-[#101a33] p-6 rounded-2xl border border-gray-800">
-                <h3 class="text-xs font-bold text-gray-500 uppercase mb-4">Deployment Tools</h3>
-                <div class="flex gap-3">
-                    <a href="monitor.py" download class="flex-1 text-center bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-bold transition">Agent (.py)</a>
-                    <a href="install.bat" download class="flex-1 text-center bg-gray-700 hover:bg-gray-600 py-3 rounded-xl font-bold transition">Installer (.bat)</a>
-                </div>
-            </div>
-            <div class="bg-[#101a33] p-6 rounded-2xl border border-gray-800">
-                <h3 class="text-xs font-bold text-gray-500 uppercase mb-4">Active User</h3>
-                <div id="userEmail" class="text-lg font-mono text-blue-400 py-2">Loading...</div>
-            </div>
+        <div class="flex gap-4">
+            <a href="monitor.py" download class="flex-1 bg-blue-600 p-3 rounded-xl text-center font-bold hover:bg-blue-500">Download Agent</a>
+            <a href="install.bat" download class="flex-1 bg-gray-800 p-3 rounded-xl text-center font-bold hover:bg-gray-700">Download Installer</a>
         </div>
 
-        <div class="bg-[#101a33] p-8 rounded-2xl border border-gray-800 shadow-xl">
-            <h2 class="text-xl font-bold mb-6 flex items-center gap-2">
-                <span class="text-blue-500">🔌</span> Real-Time USB Storage
-            </h2>
-            <div id="usbContainer" class="grid grid-cols-1 gap-4">
-                </div>
+        <div class="bg-[#101a33] p-6 rounded-2xl border border-gray-800">
+            <h2 class="text-lg font-bold mb-4 text-blue-400">Currently Connected</h2>
+            <div id="usbList" class="grid grid-cols-1 gap-3"></div>
+        </div>
+
+        <div class="bg-[#101a33] p-6 rounded-2xl border border-gray-800">
+            <h2 class="text-lg font-bold mb-4 text-orange-400">Activity Logs (Plug-In/Out)</h2>
+            <div id="logBox" class="h-64 overflow-y-auto font-mono text-xs space-y-2 bg-black/30 p-4 rounded-xl"></div>
         </div>
     </div>
 
@@ -59,54 +45,43 @@
             appId: "1:569408987884:web:0839eb7932c206fc157bc9"
         };
         firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
         const db = firebase.firestore();
+        const auth = firebase.auth();
 
         auth.onAuthStateChanged(user => {
             if (!user) { window.location = "login.html"; return; }
-            document.getElementById("userEmail").innerText = user.email;
 
-            // 1. WATCH STATUS & MACHINE
+            // Listen for Online Status
             db.collection("users").doc(user.uid).onSnapshot(doc => {
-                const data = doc.data();
-                if(!data) return;
-
-                const isOnline = data.is_online === true;
-                const dot = document.getElementById("statusDot");
-                const text = document.getElementById("statusText");
-                const badge = document.getElementById("statusBadge");
-
-                if(isOnline) {
-                    badge.className = "inline-flex items-center px-4 py-1 rounded-full border border-green-900 bg-green-900/20 text-green-500 font-bold text-xs uppercase mb-2";
-                    dot.className = "w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse";
-                    text.innerText = "Agent Online";
-                } else {
-                    badge.className = "inline-flex items-center px-4 py-1 rounded-full border border-red-900 bg-red-900/20 text-red-500 font-bold text-xs uppercase mb-2";
-                    dot.className = "w-2 h-2 rounded-full bg-red-500 mr-2";
-                    text.innerText = "Agent Offline";
-                }
-                document.getElementById("machineDisplay").innerText = "Host: " + (data.machine || "Unknown");
+                const d = doc.data();
+                const isOnline = d?.is_online === true;
+                const ind = document.getElementById("statusIndicator");
+                ind.innerText = isOnline ? "ONLINE" : "OFFLINE";
+                ind.className = isOnline ? "px-4 py-1 rounded-full bg-green-900/20 text-green-500 border border-green-800 text-xs font-bold" : "px-4 py-1 rounded-full bg-red-900/20 text-red-500 border border-red-800 text-xs font-bold";
+                document.getElementById("machineDisplay").innerText = "Machine: " + (d?.machine || "Unknown");
             });
 
-            // 2. WATCH USB DEVICES
+            // Listen for Current USBs
             db.collection("users").doc(user.uid).collection("status").doc("usb_status").onSnapshot(doc => {
                 const list = doc.data()?.usb_devices || [];
-                const container = document.getElementById("usbContainer");
-                
-                if(list.length === 0) {
-                    container.innerHTML = `<div class='text-center py-12 border-2 border-dashed border-gray-800 rounded-xl text-gray-600'>No external storage drives detected on host machine.</div>`;
-                    return;
-                }
+                const cont = document.getElementById("usbList");
+                cont.innerHTML = list.length ? "" : "<p class='text-gray-600 italic'>No devices detected.</p>";
+                list.forEach(usb => {
+                    cont.innerHTML += `<div class="p-3 bg-black/40 rounded-lg border border-gray-800 flex justify-between">
+                        <span>${usb.device_name}</span>
+                        <span class="text-blue-500 text-[10px] uppercase">${usb.serial}</span>
+                    </div>`;
+                });
+            });
 
-                container.innerHTML = list.map(usb => `
-                    <div class="flex justify-between items-center bg-black/40 p-5 rounded-xl border border-gray-800 hover:border-blue-900 transition group">
-                        <div>
-                            <p class="text-white font-bold group-hover:text-blue-400 transition">${usb.device_name}</p>
-                            <p class="text-xs text-gray-500 font-mono mt-1">Vendor: ${usb.vendor} | SN: ${usb.serial}</p>
-                        </div>
-                        <div class="text-[10px] bg-blue-900/30 text-blue-400 px-3 py-1 rounded font-black tracking-tighter uppercase border border-blue-800">Verified USB</div>
-                    </div>
-                `).join('');
+            // Listen for Logs
+            db.collection("users").doc(user.uid).collection("logs").orderBy("timestamp", "desc").limit(30).onSnapshot(snap => {
+                const box = document.getElementById("logBox");
+                box.innerHTML = snap.docs.map(doc => {
+                    const d = doc.data();
+                    const color = d.message.includes("PLUG-IN") ? "text-green-400" : "text-gray-500";
+                    return `<div class="${color}">${d.message}</div>`;
+                }).join('');
             });
         });
     </script>
