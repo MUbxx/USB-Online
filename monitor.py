@@ -6,7 +6,7 @@ from getpass import getpass
 from usbmonitor import USBMonitor
 from usbmonitor.attributes import ID_MODEL, ID_SERIAL, ID_VENDOR
 
-API_KEY = "YOUR_FIREBASE_WEB_API_KEY"
+API_KEY = "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k"
 PROJECT_ID = "cybermonitor-1ab3c"
 
 print("=== CyberMonitor Agent v5.0 ===")
