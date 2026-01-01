@@ -5,33 +5,28 @@
 <title>CyberMonitor Dashboard</title>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <style>
 body{background:#020617;color:white;font-family:Arial;margin:0}
-.top{background:#020617;padding:12px 18px;border-bottom:1px solid #111827;display:flex;justify-content:space-between}
-.card{background:#0f172a;margin:10px;padding:12px;border-radius:12px;border:1px solid #1f2937}
+.card{background:#0f172a;margin:12px;padding:15px;border-radius:12px;border:1px solid #1f2937}
 .badge-online{color:#10b981}
 .badge-offline{color:#ef4444}
-select,button{padding:6px 10px;border-radius:6px;border:none}
+.time{font-family:monospace;color:#a5b4fc}
 table{width:100%;border-collapse:collapse}
 th,td{padding:8px;border-bottom:1px solid #1f2937}
-.time{font-family:monospace;color:#a5b4fc}
 </style>
 </head>
+
 <body>
 
-<div class="top">
-  <div>CyberMonitor — Dashboard</div>
-  <div>
-    <select id="uidSelect"></select>
-    <button onclick="logout()">Logout</button>
-  </div>
+<div class="card">
+  <h2>CyberMonitor Dashboard</h2>
+  UID fixed: <b>MXXq4tHL35hzKi9PJytPCXWDSzn1</b>
 </div>
 
 <div class="card">
-  <h3>User Status</h3>
+  <h3>Status</h3>
   <p><b>Email:</b> <span id="email"></span></p>
   <p><b>Machine:</b> <span id="machine"></span></p>
   <p><b>Status:</b> <span id="status"></span></p>
@@ -51,17 +46,13 @@ th,td{padding:8px;border-bottom:1px solid #1f2937}
 </div>
 
 <script>
-const firebaseConfig={
- apiKey:"AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
- authDomain:"cybermonitor-1ab3c.firebaseapp.com",
- projectId:"cybermonitor-1ab3c"
-};
+firebase.initializeApp({
+  apiKey:"AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
+  projectId:"cybermonitor-1ab3c"
+});
 
-firebase.initializeApp(firebaseConfig);
-const auth=firebase.auth();
 const db=firebase.firestore();
-
-function logout(){auth.signOut().then(()=>location="login.html")}
+const UID="MXXq4tHL35hzKi9PJytPCXWDSzn1";
 
 function toIST(utc){
  let d=new Date(utc);
@@ -69,70 +60,48 @@ function toIST(utc){
  return t.toLocaleString("en-IN",{hour12:false}).replace(",","");
 }
 
-// ---------- LIST ALL USERS ----------
-db.collection("users").onSnapshot(s=>{
- let sel=document.getElementById("uidSelect");
- sel.innerHTML="";
- s.forEach(doc=>{
-   let opt=document.createElement("option");
-   opt.value=doc.id;
-   opt.innerText=doc.data().email||doc.id;
-   sel.appendChild(opt);
- });
- if(sel.value) load(sel.value);
+db.doc(`users/${UID}`).onSnapshot(doc=>{
+ if(!doc.exists)return;
+ let d=doc.data();
+
+ document.getElementById("email").innerText=d.email||"";
+ document.getElementById("machine").innerText=d.machine||"";
+ document.getElementById("last_seen").innerText=d.last_seen?toIST(d.last_seen):"";
+
+ let last=new Date(d.last_seen||0);
+ let diff=(new Date()-last)/1000;
+
+ document.getElementById("status").innerHTML=
+   diff<12?"<span class='badge-online'>ONLINE</span>"
+          :"<span class='badge-offline'>OFFLINE</span>";
 });
 
-document.getElementById("uidSelect").onchange=function(){
- load(this.value);
-};
+db.doc(`users/${UID}/status/usb_status`).onSnapshot(doc=>{
+ const t=document.getElementById("usb_table");
+ t.innerHTML="<tr><th>Device</th><th>Token</th></tr>";
 
-// ---------- LOAD USER DATA ----------
-function load(uid){
+ if(!doc.exists)return;
 
- // user profile
- db.doc(`users/${uid}`).onSnapshot(doc=>{
-   if(!doc.exists)return;
+ let arr=doc.data().usb_devices?.values||[];
 
-   let d=doc.data();
-   document.getElementById("email").innerText=d.email||"";
-   document.getElementById("machine").innerText=d.machine||"";
-   document.getElementById("last_seen").innerText=d.last_seen?toIST(d.last_seen):"";
-
-   let last=new Date(d.last_seen);
-   let now=new Date();
-   let diff=(now-last)/1000;
-
-   document.getElementById("status").innerHTML=
-     diff<12?"<span class='badge-online'>ONLINE</span>"
-            :"<span class='badge-offline'>OFFLINE</span>";
+ arr.forEach(v=>{
+  let f=v.mapValue.fields;
+  let tr=document.createElement("tr");
+  tr.innerHTML=`<td>${f.device_name.stringValue}</td><td>${f.token.stringValue}</td>`;
+  t.appendChild(tr);
  });
+});
 
- // usb table
- db.doc(`users/${uid}/status/usb_status`).onSnapshot(doc=>{
-   const t=document.getElementById("usb_table");
-   t.innerHTML="<tr><th>Device</th><th>Token</th></tr>";
-   if(!doc.exists)return;
-   let arr=doc.data().usb_devices?.values||[];
-   arr.forEach(v=>{
-     let f=v.mapValue.fields;
-     let tr=document.createElement("tr");
-     tr.innerHTML=`<td>${f.device_name.stringValue}</td><td>${f.token.stringValue}</td>`;
-     t.appendChild(tr);
-   });
+db.collection(`users/${UID}/logs`).orderBy("timestamp","desc").limit(50).onSnapshot(s=>{
+ const box=document.getElementById("logs");
+ box.innerHTML="";
+ s.forEach(doc=>{
+  let d=doc.data();
+  let div=document.createElement("div");
+  div.innerHTML=`<span class="time">${toIST(d.timestamp)}</span> — ${d.message}`;
+  box.appendChild(div);
  });
-
- // logs
- db.collection(`users/${uid}/logs`).orderBy("timestamp","desc").limit(20).onSnapshot(s=>{
-   const box=document.getElementById("logs");
-   box.innerHTML="";
-   s.forEach(doc=>{
-     let d=doc.data();
-     let div=document.createElement("div");
-     div.innerHTML=`<span class="time">${toIST(d.timestamp)}</span> — ${d.message}`;
-     box.appendChild(div);
-   });
- });
-}
+});
 </script>
 
 </body>
