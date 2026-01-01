@@ -83,8 +83,8 @@ function registerUser(){
 
     auth.createUserWithEmailAndPassword(email, password)
         .then((userCredential)=>{
-            // Redirect to dashboard
-            window.location.href = "dashboard.html";
+            // Redirect to login
+            window.location.href = "login.html";
         })
         .catch((error)=>{
             document.getElementById("registerError").innerText = error.message;
