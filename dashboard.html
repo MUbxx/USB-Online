@@ -55,28 +55,35 @@ td, th {
 </div>
 
 <script>
+/* ===== CONFIG (MATCH monitor.py) ===== */
 const PROJECT_ID = "cybermonitor-1ab3c";
+const API_KEY = "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k";
 const UID = "MXXq4tHL35hzKi9PJytPCXWDSzn1";
+/* ==================================== */
+
 document.getElementById("uid").innerText = UID;
 
 const BASE =
   `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 
+async function apiGet(path) {
+  const r = await fetch(`${BASE}/${path}?key=${API_KEY}`);
+  if (!r.ok) {
+    console.error("Firestore error:", r.status);
+    return null;
+  }
+  return r.json();
+}
+
 async function loadStatus() {
-  const r = await fetch(`${BASE}/users/${UID}`);
-  if (!r.ok) return;
-  const d = await r.json();
+  const d = await apiGet(`users/${UID}`);
+  if (!d) return;
+
   const f = d.fields;
-
-  document.getElementById("email").innerText =
-    f.email?.stringValue || "-";
-
-  document.getElementById("machine").innerText =
-    f.machine?.stringValue || "-";
-
+  document.getElementById("email").innerText = f.email?.stringValue || "-";
+  document.getElementById("machine").innerText = f.machine?.stringValue || "-";
   document.getElementById("status").innerText =
     f.is_online?.booleanValue ? "ONLINE 🟢" : "OFFLINE 🔴";
-
   document.getElementById("lastSeen").innerText =
     f.last_seen?.timestampValue
       ? new Date(f.last_seen.timestampValue).toLocaleString()
@@ -84,16 +91,13 @@ async function loadStatus() {
 }
 
 async function loadUSB() {
-  const r = await fetch(`${BASE}/users/${UID}/status/usb_status`);
-  if (!r.ok) return;
-  const d = await r.json();
+  const d = await apiGet(`users/${UID}/status/usb_status`);
+  if (!d) return;
 
   const tbody = document.getElementById("usbBody");
   tbody.innerHTML = "";
 
-  const arr =
-    d.fields?.usb_devices?.arrayValue?.values || [];
-
+  const arr = d.fields?.usb_devices?.arrayValue?.values || [];
   arr.forEach(v => {
     const f = v.mapValue.fields;
     tbody.innerHTML += `
@@ -105,15 +109,13 @@ async function loadUSB() {
 }
 
 async function loadLogs() {
-  const r = await fetch(`${BASE}/users/${UID}/logs`);
-  if (!r.ok) return;
-  const d = await r.json();
+  const d = await apiGet(`users/${UID}/logs`);
+  if (!d || !d.documents) return;
 
   const box = document.getElementById("logs");
   box.innerHTML = "";
 
-  const docs = d.documents || [];
-  docs
+  d.documents
     .sort((a,b) =>
       b.fields.timestamp.timestampValue.localeCompare(
         a.fields.timestamp.timestampValue))
