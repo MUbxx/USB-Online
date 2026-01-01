@@ -1,15 +1,15 @@
-import socket
 import time
+import socket
 import requests
+import pythoncom
+import wmi
 from datetime import datetime, timezone
 from getpass import getpass
-from usbmonitor import USBMonitor
-from usbmonitor.attributes import ID_MODEL, ID_SERIAL, ID_VENDOR
 
 API_KEY = "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k"
 PROJECT_ID = "cybermonitor-1ab3c"
 
-print("=== CyberMonitor Agent v5.0 ===")
+print("=== CyberMonitor Agent v5.1 (Windows Stable) ===")
 
 EMAIL = input("Email: ")
 PASSWORD = getpass("Password: ")
@@ -24,7 +24,6 @@ def login():
         "password": PASSWORD,
         "returnSecureToken": True
     })
-
     r.raise_for_status()
 
     j = r.json()
@@ -46,12 +45,12 @@ def update_user_state(token, uid, online=True):
     requests.patch(url, json=payload, headers={"Authorization": f"Bearer {token}"})
 
 
-def push_log(token, uid, message, severity="INFO"):
+def push_log(token, uid, msg, severity="INFO"):
     url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/users/{uid}/logs"
 
     payload = {
         "fields": {
-            "message": {"stringValue": message},
+            "message": {"stringValue": msg},
             "severity": {"stringValue": severity},
             "timestamp": {"timestampValue": datetime.now(timezone.utc).isoformat()}
         }
@@ -60,25 +59,35 @@ def push_log(token, uid, message, severity="INFO"):
     requests.post(url, json=payload, headers={"Authorization": f"Bearer {token}"})
 
 
-def sync_usb_devices(token, uid, monitor):
-    devices = monitor.get_available_devices()
+def get_usb_devices():
+    pythoncom.CoInitialize()
+    c = wmi.WMI()
+    devices = {}
 
-    usb_array = []
+    for d in c.Win32_PnPEntity():
+        if d.PNPClass == "USB":
+            name = d.Name or "Unknown USB"
+            pnp = d.PNPDeviceID or "N/A"
+            token = pnp  # unique device fingerprint
 
-    for dev_id, info in devices.items():
+            devices[token] = {
+                "device_name": name,
+                "token": token,
+                "pnp_id": pnp
+            }
+    return devices
 
-        model = info.get(ID_MODEL, "Unknown")
-        serial = info.get(ID_SERIAL, "N/A")
-        vendor = info.get(ID_VENDOR, "Generic")
 
-        token_id = f"{vendor}:{serial}"
+def sync_usb_list(token, uid, devices):
+    arr = []
 
-        usb_array.append({
+    for dev in devices.values():
+        arr.append({
             "mapValue": {
                 "fields": {
-                    "device_name": {"stringValue": model},
-                    "token": {"stringValue": token_id},
-                    "pnp_id": {"stringValue": dev_id}
+                    "device_name": {"stringValue": dev["device_name"]},
+                    "token": {"stringValue": dev["token"]},
+                    "pnp_id": {"stringValue": dev["pnp_id"]}
                 }
             }
         })
@@ -87,47 +96,48 @@ def sync_usb_devices(token, uid, monitor):
 
     payload = {
         "fields": {
-            "usb_devices": {
-                "arrayValue": {"values": usb_array}
-            }
+            "usb_devices": {"arrayValue": {"values": arr}}
         }
     }
 
     requests.patch(url, json=payload, headers={"Authorization": f"Bearer {token}"})
 
 
-def on_connect(dev_id, info):
-    msg = f"CONNECTED: {info.get(ID_MODEL)}"
-    print(msg)
-    push_log(TOKEN, UID, msg, "HIGH")
-    sync_usb_devices(TOKEN, UID, monitor)
-
-
-def on_disconnect(dev_id, info):
-    msg = f"REMOVED: {info.get(ID_MODEL)}"
-    print(msg)
-    push_log(TOKEN, UID, msg, "INFO")
-    sync_usb_devices(TOKEN, UID, monitor)
-
+# ---------------- Main ----------------
 
 TOKEN, UID = login()
-
-monitor = USBMonitor()
-monitor.start_monitoring(on_connect=on_connect, on_disconnect=on_disconnect)
-
 update_user_state(TOKEN, UID, True)
-sync_usb_devices(TOKEN, UID, monitor)
 
-print("Agent running. Ctrl+C to stop.")
+previous = {}
+
+print("Monitoring USB… Press Ctrl+C to stop")
 
 try:
     while True:
+        current = get_usb_devices()
+
+        # detect new
+        for k in current:
+            if k not in previous:
+                msg = f"CONNECTED: {current[k]['device_name']}"
+                print(msg)
+                push_log(TOKEN, UID, msg, "HIGH")
+
+        # detect removed
+        for k in list(previous):
+            if k not in current:
+                msg = f"REMOVED: {previous[k]['device_name']}"
+                print(msg)
+                push_log(TOKEN, UID, msg, "INFO")
+
+        sync_usb_list(TOKEN, UID, current)
+        previous = current
+
         update_user_state(TOKEN, UID, True)
-        time.sleep(20)
+        time.sleep(3)
 
 except KeyboardInterrupt:
-    print("Stopping...")
+    print("Exiting…")
 
 finally:
     update_user_state(TOKEN, UID, False)
-    monitor.stop_monitoring()
