@@ -6,86 +6,85 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <style>
 body{
-  background: radial-gradient(circle at top, #020617, #01030a);
+  background:#020617;
   color:#e5e7eb;
   font-family: Inter, system-ui, sans-serif;
 }
-.glass{
-  background:rgba(2,12,27,.85);
-  backdrop-filter: blur(14px);
-  border:1px solid rgba(255,255,255,.06);
+.card{
+  background:#020c1b;
+  border:1px solid #0f172a;
+  border-radius:14px;
 }
-.tab-btn.active{ background:#2563eb; }
+.tab-btn.active{
+  background:#2563eb;
+}
 </style>
 </head>
 
 <body>
 
-<div class="max-w-7xl mx-auto px-6 py-6">
+<div class="max-w-7xl mx-auto p-6">
 
 <!-- HEADER -->
 <div class="flex justify-between items-center mb-6">
-  <div>
-    <h1 class="text-3xl font-bold">🛡 CyberMonitor</h1>
-    <p class="text-gray-400 text-sm">USB Endpoint Protection Dashboard</p>
-  </div>
-  <div class="flex gap-2">
-    <button onclick="exportCSV()" class="bg-emerald-600 px-4 py-2 rounded-lg">CSV</button>
-    <button onclick="exportPDF()" class="bg-indigo-600 px-4 py-2 rounded-lg">PDF</button>
-    <button onclick="logout()" class="bg-red-600 px-4 py-2 rounded-lg">Logout</button>
-  </div>
+  <h1 class="text-3xl font-bold">🛡 CyberMonitor</h1>
+  <button onclick="logout()" class="bg-red-600 px-4 py-2 rounded">Logout</button>
 </div>
 
 <!-- TABS -->
 <div class="flex gap-2 mb-6">
-  <button class="tab-btn active px-4 py-2 rounded-lg" onclick="openTab('monitor')">Monitoring</button>
-  <button class="tab-btn px-4 py-2 rounded-lg" onclick="openTab('logs')">Logs</button>
-  <button class="tab-btn px-4 py-2 rounded-lg" onclick="openTab('profile')">Profile</button>
+  <button class="tab-btn active px-4 py-2 rounded" onclick="openTab('monitor')">Monitoring</button>
+  <button class="tab-btn px-4 py-2 rounded" onclick="openTab('logs')">Logs</button>
+  <button class="tab-btn px-4 py-2 rounded" onclick="openTab('profile')">Profile</button>
 </div>
 
-<!-- MONITOR TAB -->
-<div id="monitor" class="tab glass p-5 rounded-xl">
-  <h2 class="text-xl font-semibold mb-4">Connected USB Devices</h2>
+<!-- MONITOR -->
+<div id="monitor" class="tab card p-5">
+  <h2 class="text-xl mb-4">Connected USB Devices</h2>
   <table class="w-full text-sm">
-    <thead class="text-cyan-300 border-b border-gray-700">
+    <thead class="border-b border-gray-700 text-cyan-300">
       <tr>
-        <th>Device</th>
-        <th>Risk</th>
-        <th>Action</th>
+        <th class="text-left py-2">Device</th>
+        <th class="text-left py-2">Risk</th>
+        <th class="text-left py-2">Trust</th>
       </tr>
     </thead>
     <tbody id="usbTable"></tbody>
   </table>
 </div>
 
-<!-- LOGS TAB -->
-<div id="logs" class="tab glass p-5 rounded-xl hidden">
-  <h2 class="text-xl font-semibold mb-4">USB Session Logs</h2>
+<!-- LOGS -->
+<div id="logs" class="tab card p-5 hidden">
+  <div class="flex justify-between mb-4">
+    <h2 class="text-xl">USB Session Logs</h2>
+    <div class="flex gap-2">
+      <button onclick="printLogs()" class="bg-indigo-600 px-3 py-1 rounded">Print</button>
+      <button onclick="exportCSV()" class="bg-emerald-600 px-3 py-1 rounded">CSV</button>
+    </div>
+  </div>
   <div id="logBox" class="max-h-96 overflow-y-auto text-sm"></div>
 </div>
 
 <!-- PROFILE -->
-<div id="profile" class="tab glass p-5 rounded-xl hidden">
-  <div id="profileInfo"></div>
+<div id="profile" class="tab card p-5 hidden">
+  <h2 class="text-xl mb-4">Profile</h2>
+  <div id="profileInfo" class="text-sm"></div>
 </div>
 
 </div>
 
 <script>
 /* ---------------- FIREBASE ---------------- */
-const firebaseConfig = {
+firebase.initializeApp({
   apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
   authDomain: "cybermonitor-1ab3c.firebaseapp.com",
   projectId: "cybermonitor-1ab3c",
-};
-firebase.initializeApp(firebaseConfig);
+});
 const db = firebase.firestore();
 
 /* ---------------- AUTH ---------------- */
@@ -105,85 +104,101 @@ function logout(){
   location.href="login.html";
 }
 
-/* ---------------- WHITELIST ---------------- */
+/* ---------------- TRUST SYSTEM ---------------- */
 function trustDevice(name){
-  db.collection("users").doc(uid).collection("trusted").doc(name).set({
-    trusted:true,
-    added:new Date().toISOString()
-  });
+  db.collection("users").doc(uid)
+    .collection("trusted").doc(name)
+    .set({trusted:true});
 }
 
 /* ---------------- USB MONITOR ---------------- */
 db.collection("users").doc(uid).collection("usb_status")
 .orderBy("timestamp","desc")
-.onSnapshot(async snap=>{
+.onSnapshot(snap=>{
   let html="";
-  for(const doc of snap.docs){
+  snap.forEach(doc=>{
     const d=doc.data();
-    const trusted = await db.collection("users").doc(uid)
-      .collection("trusted").doc(d.name).get();
-
     html+=`
       <tr class="border-b border-gray-800">
         <td class="py-2">${d.name}</td>
-        <td class="py-2">${trusted.exists?"LOW (Trusted)":d.risk}</td>
+        <td class="py-2">${d.risk}</td>
         <td class="py-2">
-          ${trusted.exists?"—":
-          `<button onclick="trustDevice('${d.name}')"
-           class="bg-green-600 px-3 py-1 rounded text-xs">Trust</button>`}
+          <button onclick="trustDevice('${d.name}')"
+            class="bg-green-600 px-2 py-1 rounded text-xs">
+            Trust
+          </button>
         </td>
       </tr>`;
-  }
+  });
   document.getElementById("usbTable").innerHTML=html;
 });
 
 /* ---------------- SESSION LOGS ---------------- */
-let allLogs=[];
+let logs=[];
 db.collection("users").doc(uid).collection("logs")
-.orderBy("timestamp","desc")
+.orderBy("timestamp","asc")
 .onSnapshot(snap=>{
-  allLogs=[];
-  let html="";
-  snap.forEach(doc=>{
-    const d=doc.data();
-    allLogs.push(d);
-    html+=`
-      <div class="mb-2">
-        <b>${d.event}</b> — ${d.device}<br>
-        <span class="text-xs text-gray-400">
-          ${new Date(d.timestamp).toLocaleString()}
-        </span>
-        <hr class="border-gray-800 mt-2">
-      </div>`;
-  });
-  document.getElementById("logBox").innerHTML=html;
+  logs=[];
+  snap.forEach(doc=>logs.push(doc.data()));
+  renderLogs();
 });
 
-/* ---------------- EXPORT CSV ---------------- */
+function renderLogs(){
+  let html="";
+  let sessions={};
+
+  logs.forEach(l=>{
+    if(l.event==="USB Connected"){
+      sessions[l.device]={start:new Date(l.timestamp)};
+    }
+    if(l.event==="USB Removed" && sessions[l.device]){
+      const end=new Date(l.timestamp);
+      const start=sessions[l.device].start;
+      const mins=Math.round((end-start)/60000);
+      html+=`
+        <div class="mb-2">
+          <b>${l.device}</b><br>
+          Duration: ${mins} minutes<br>
+          <span class="text-xs text-gray-400">
+            ${start.toLocaleString()} → ${end.toLocaleString()}
+          </span>
+          <hr class="border-gray-800 mt-2">
+        </div>`;
+      delete sessions[l.device];
+    }
+  });
+  document.getElementById("logBox").innerHTML=
+    html||"<p class='text-gray-400'>No completed sessions</p>";
+}
+
+/* ---------------- EXPORT / PRINT ---------------- */
 function exportCSV(){
-  let csv="Event,Device,Time\n";
-  allLogs.forEach(l=>{
-    csv+=`${l.event},${l.device},${new Date(l.timestamp).toLocaleString()}\n`;
+  let csv="Device,Start,End,Duration(min)\n";
+  document.querySelectorAll("#logBox b").forEach((b,i)=>{
+    csv+=`${b.innerText}\n`;
   });
   const blob=new Blob([csv],{type:"text/csv"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
-  a.download="usb_logs.csv";
+  a.download="usb_sessions.csv";
   a.click();
 }
-
-/* ---------------- EXPORT PDF ---------------- */
-function exportPDF(){
-  const {jsPDF}=window.jspdf;
-  const pdf=new jsPDF();
-  pdf.text("CyberMonitor USB Logs",10,10);
-  let y=20;
-  allLogs.forEach(l=>{
-    pdf.text(`${l.event} - ${l.device}`,10,y);
-    y+=7;
-  });
-  pdf.save("usb_logs.pdf");
+function printLogs(){
+  const w=window.open("");
+  w.document.write("<h2>CyberMonitor USB Sessions</h2>"+logBox.innerHTML);
+  w.print();
 }
+
+/* ---------------- PROFILE ---------------- */
+db.collection("users").doc(uid).onSnapshot(doc=>{
+  const d=doc.data();
+  profileInfo.innerHTML=`
+    <b>Email:</b> ${d.email}<br>
+    <b>Machine:</b> ${d.machine}<br>
+    <b>Status:</b> ${d.is_online?"Online":"Offline"}<br>
+    <b>Last Seen:</b> ${new Date(d.last_seen).toLocaleString()}
+  `;
+});
 </script>
 
 </body>
