@@ -30,10 +30,6 @@ body {
 
 .badge-online {color:#10b981;}
 .badge-offline {color:#ef4444;}
-.badge-trusted {color:#22c55e;}
-.badge-blocked {color:#ef4444;}
-.badge-unknown {color:#eab308;}
-.badge-suspicious {color:#f97316;}
 
 table {
   width:100%;
@@ -43,6 +39,7 @@ table {
 th, td {
   padding:8px;
   border-bottom:1px solid #1e293b;
+  font-size:14px;
 }
 
 button {
@@ -59,9 +56,6 @@ button {
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
 
-<!-- EmailJS -->
-<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
-
 </head>
 <body>
 
@@ -71,7 +65,6 @@ button {
   <h3>User Status</h3>
   <p><b>Email:</b> <span id="email"></span></p>
   <p><b>Machine:</b> <span id="machine"></span></p>
-  <p><b>Active User:</b> <span id="active_user"></span></p>
   <p><b>Status:</b> <span id="status"></span></p>
   <p><b>Last Seen:</b> <span id="last_seen"></span></p>
 </div>
@@ -81,9 +74,8 @@ button {
   <table id="usb_table">
     <tr>
       <th>Device Name</th>
-      <th>VID:PID</th>
+      <th>Token</th>
       <th>PNP ID</th>
-      <th>Status</th>
       <th>Action</th>
     </tr>
   </table>
@@ -95,7 +87,7 @@ button {
 </div>
 
 <script>
-/* ---------------- FIREBASE CONFIG ---------------- */
+/* ---------- FIREBASE CONFIG ---------- */
 const firebaseConfig = {
   apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
   authDomain: "cybermonitor-1ab3c.firebaseapp.com",
@@ -105,59 +97,54 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-/* ---------- EMAILJS INIT ---------- */
-emailjs.init("EMAILJS_PUBLIC_KEY");
+/* ---------- GET USER UID ---------- */
+let uid = localStorage.getItem("uid");
+if (!uid) {
+  uid = prompt("Enter Firebase UID");
+  localStorage.setItem("uid", uid);
+}
 
-/* ---------- TELEGRAM CONFIG ---------- */
-const TELEGRAM_BOT_TOKEN = "TELEGRAM_BOT_TOKEN";
-const TELEGRAM_CHAT_ID = "TELEGRAM_CHAT_ID";
-
-/* ---------- USER ID SELECTION ----------*/
-let uid = localStorage.getItem("uid") || prompt("Enter Firebase UID");
-localStorage.setItem("uid", uid);
-
-/* ---------- STATUS LISTENER ----------*/
+/* ---------- USER STATUS LISTENER ---------- */
 db.doc(`users/${uid}`).onSnapshot(doc => {
   if (!doc.exists) return;
 
-  let d = doc.data();
+  const data = doc.data();
 
-  document.getElementById("email").innerText = d.email || "";
-  document.getElementById("machine").innerText = d.machine || "";
-  document.getElementById("active_user").innerText = d.active_user || "";
-  document.getElementById("last_seen").innerText = d.last_seen || "";
+  document.getElementById("email").innerText = data.email || "";
+  document.getElementById("machine").innerText = data.machine || "";
+  document.getElementById("last_seen").innerText = data.last_seen || "";
 
   document.getElementById("status").innerHTML =
-    d.is_online ? "<span class='badge-online'>ONLINE</span>"
-                : "<span class='badge-offline'>OFFLINE</span>";
+    data.is_online
+    ? "<span class='badge-online'>ONLINE</span>"
+    : "<span class='badge-offline'>OFFLINE</span>";
 });
 
-/* ---------- USB DEVICE LIST ----------*/
+/* ---------- USB DEVICE LIST ---------- */
 db.doc(`users/${uid}/status/usb_status`).onSnapshot(doc => {
   const table = document.getElementById("usb_table");
-  
-  // clear except header
+
+  // reset header
   table.innerHTML =
-    "<tr><th>Device Name</th><th>VID:PID</th><th>PNP ID</th><th>Status</th><th>Action</th></tr>";
+    "<tr><th>Device Name</th><th>Token</th><th>PNP ID</th><th>Action</th></tr>";
 
   if (!doc.exists) return;
 
-  let arr = doc.data().usb_devices?.values || [];
+  const values = doc.data().usb_devices?.values || [];
 
-  arr.forEach(v => {
-    let f = v.mapValue.fields;
+  values.forEach(v => {
+    const f = v.mapValue.fields;
 
-    let name = f.device_name.stringValue;
-    let token = f.token.stringValue;
-    let pnp = f.pnp_id.stringValue;
+    const name = f.device_name?.stringValue || "Unknown";
+    const token = f.token?.stringValue || "N/A";
+    const pnp = f.pnp_id?.stringValue || "N/A";
 
-    let row = document.createElement("tr");
+    const row = document.createElement("tr");
 
     row.innerHTML = `
       <td>${name}</td>
       <td>${token}</td>
       <td>${pnp}</td>
-      <td id="status-${token}">Checking...</td>
       <td>
         <button class="allow-btn" onclick="trust('${token}')">Trust</button>
         <button class="block-btn" onclick="block('${token}')">Block</button>
@@ -168,65 +155,49 @@ db.doc(`users/${uid}/status/usb_status`).onSnapshot(doc => {
   });
 });
 
-/* ---------- TRUST & BLOCK ----------*/
+/* ---------- TRUST & BLOCK ---------- */
 function trust(token) {
   db.collection(`users/${uid}/security/allowlist`).add({
     token: token,
-    type: "ALLOW"
+    type: "ALLOW",
+    created: new Date()
   });
-  alert("Trusted saved in cloud");
+  alert("Trusted device saved");
 }
 
 function block(token) {
   db.collection(`users/${uid}/security/allowlist`).add({
     token: token,
-    type: "BLOCK"
+    type: "BLOCK",
+    created: new Date()
   });
-  alert("Blocked saved in cloud");
+  alert("Blocked device saved");
 }
 
-/* ---------- LOG STREAM ----------*/
-db.collection(`users/${uid}/logs`).orderBy("timestamp", "desc").limit(20)
-.onSnapshot(snap => {
-  const box = document.getElementById("logs");
-  box.innerHTML = "";
+/* ---------- LIVE SECURITY LOGS ---------- */
+db.collection(`users/${uid}/logs`)
+  .orderBy("timestamp", "desc")
+  .limit(25)
+  .onSnapshot(snap => {
 
-  snap.forEach(doc => {
-    let d = doc.data();
-    let color =
-      d.severity === "CRITICAL" ? "red" :
-      d.severity === "HIGH" ? "orange" :
-      "gray";
+    const container = document.getElementById("logs");
+    container.innerHTML = "";
 
-    let div = document.createElement("div");
-    div.innerHTML =
-      `<p style="color:${color}">[${d.timestamp}] ${d.message}</p>`;
+    snap.forEach(doc => {
+      const d = doc.data();
 
-    box.appendChild(div);
+      const p = document.createElement("p");
 
-    // Alerts trigger email & telegram if alert=true
-    if (d.alert) sendAlerts(d.message);
-  });
+      let color = "#9ca3af";
+      if (d.severity === "HIGH") color = "#f97316";
+      if (d.severity === "CRITICAL") color = "#ef4444";
+
+      p.style.color = color;
+      p.innerText = `[${d.timestamp}] ${d.message}`;
+
+      container.appendChild(p);
+    });
 });
-
-/* ---------- EMAIL AND TELEGRAM ALERTS ----------*/
-function sendAlerts(text) {
-
-  // EMAILJS
-  emailjs.send("EMAILJS_SERVICE_ID","EMAILJS_TEMPLATE_ID",{
-    message: text
-  });
-
-  // TELEGRAM
-  fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      chat_id: TELEGRAM_CHAT_ID,
-      text: "🚨 CyberMonitor Alert:\n" + text
-    })
-  });
-}
 </script>
 
 </body>
