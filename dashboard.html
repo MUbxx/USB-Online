@@ -3,13 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <title>CyberMonitor Dashboard</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import {
-  getFirestore, doc, onSnapshot, collection
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, doc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
@@ -17,83 +13,76 @@ const firebaseConfig = {
   projectId: "cybermonitor-1ab3c"
 };
 
-const FIXED_UID = "MXXq4tHL35hzKi9PJytPCXWDSzn1";
-
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// 🔒 FIXED UID (matches agent)
+const UID = "MXXq4tHL35hzKi9PJytPCXWDSzn1";
+
 /* ================= STATUS ================= */
-onSnapshot(doc(db, "users", FIXED_UID), snap => {
+onSnapshot(doc(db, "users", UID), snap => {
   if (!snap.exists()) return;
   const f = snap.data().fields;
 
-  email.innerText   = f.email?.stringValue || "-";
-  machine.innerText = f.machine?.stringValue || "-";
-  status.innerText  = f.is_online?.booleanValue ? "ONLINE 🟢" : "OFFLINE 🔴";
+  document.getElementById("email").innerText =
+    f.email?.stringValue || "-";
 
-  if (f.last_seen?.timestampValue) {
-    lastSeen.innerText =
-      new Date(f.last_seen.timestampValue).toLocaleString();
-  }
+  document.getElementById("machine").innerText =
+    f.machine?.stringValue || "-";
+
+  document.getElementById("status").innerText =
+    f.is_online?.booleanValue ? "ONLINE 🟢" : "OFFLINE 🔴";
+
+  document.getElementById("lastSeen").innerText =
+    f.last_seen?.timestampValue
+      ? new Date(f.last_seen.timestampValue).toLocaleString()
+      : "-";
 });
 
 /* ================= USB ================= */
-onSnapshot(
-  doc(db, "users", FIXED_UID, "status", "usb_status"),
-  snap => {
-    usbTable.innerHTML = "";
-    if (!snap.exists()) return;
+onSnapshot(doc(db, "users", UID, "status", "usb_status"), snap => {
+  const tbody = document.getElementById("usbBody");
+  tbody.innerHTML = "";
+  if (!snap.exists()) return;
 
-    const arr = snap.data().fields.usb_devices?.arrayValue?.values || [];
-    arr.forEach(v => {
-      const f = v.mapValue.fields;
-      usbTable.innerHTML += `
-        <tr>
-          <td>${f.device_name.stringValue}</td>
-          <td>${f.token.stringValue}</td>
-        </tr>`;
-    });
-  }
-);
+  const arr = snap.data().fields.usb_devices?.arrayValue?.values || [];
+  arr.forEach(d => {
+    const f = d.mapValue.fields;
+    tbody.innerHTML += `
+      <tr>
+        <td>${f.device_name.stringValue}</td>
+        <td>${f.token.stringValue}</td>
+      </tr>`;
+  });
+});
 
 /* ================= LOGS ================= */
-onSnapshot(collection(db, "users", FIXED_UID, "logs"), snap => {
-  logs.innerHTML = "";
+onSnapshot(collection(db, "users", UID, "logs"), snap => {
+  const box = document.getElementById("logs");
+  box.innerHTML = "";
   snap.docs
-    .sort((a,b)=>
-      b.data().fields.timestamp.timestampValue
-      .localeCompare(a.data().fields.timestamp.timestampValue))
+    .sort((a,b) =>
+      b.data().fields.timestamp.timestampValue.localeCompare(
+        a.data().fields.timestamp.timestampValue))
     .forEach(d => {
       const f = d.data().fields;
-      logs.innerHTML += `<div>[${f.severity.stringValue}] ${f.message.stringValue}</div>`;
+      box.innerHTML += `<div>[${f.severity.stringValue}] ${f.message.stringValue}</div>`;
     });
 });
 </script>
 
 <style>
-body {
-  background:#0b1020;
-  color:#fff;
-  font-family:system-ui;
-  padding:20px;
-}
-.card {
-  background:#111833;
-  padding:15px;
-  border-radius:10px;
-  margin-bottom:15px;
-}
+body { background:#0b1020; color:#fff; font-family:Arial; padding:20px }
+.card { background:#111933; padding:15px; margin-bottom:20px; border-radius:10px }
 table { width:100%; border-collapse:collapse }
-td { padding:6px; border-bottom:1px solid #222 }
+td,th { padding:8px; border-bottom:1px solid #333 }
 </style>
 </head>
 
 <body>
 
-<div class="card">
-  <h2>CyberMonitor Dashboard</h2>
-  <small>UID fixed: <b>MXXq4tHL35hzKi9PJytPCXWDSzn1</b></small>
-</div>
+<h1>CyberMonitor Dashboard</h1>
+<p>UID fixed: <b>MXXq4tHL35hzKi9PJytPCXWDSzn1</b></p>
 
 <div class="card">
   <h3>Status</h3>
@@ -106,7 +95,8 @@ td { padding:6px; border-bottom:1px solid #222 }
 <div class="card">
   <h3>External USB Devices</h3>
   <table>
-    <tbody id="usbTable"></tbody>
+    <tr><th>Device</th><th>Token</th></tr>
+    <tbody id="usbBody"></tbody>
   </table>
 </div>
 
