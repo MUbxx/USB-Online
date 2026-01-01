@@ -5,23 +5,23 @@
 <title>CyberMonitor Dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<!-- Tailwind CSS -->
 <script src="https://cdn.tailwindcss.com"></script>
-
-<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <style>
-body {
+body{
   background: radial-gradient(circle at top, #020617, #01030a);
-  color: #e5e7eb;
+  color:#e5e7eb;
   font-family: Inter, system-ui, sans-serif;
 }
-.glass {
-  background: rgba(2,12,27,0.85);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255,255,255,0.05);
+.glass{
+  background:rgba(2,12,27,.85);
+  backdrop-filter: blur(12px);
+  border:1px solid rgba(255,255,255,.05);
+}
+.tab-btn.active{
+  background:#2563eb;
 }
 </style>
 </head>
@@ -31,72 +31,66 @@ body {
 <div class="max-w-7xl mx-auto px-6 py-6">
 
 <!-- HEADER -->
-<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+<div class="flex justify-between items-center mb-6">
   <div>
-    <h1 class="text-3xl font-bold text-white">🛡 CyberMonitor Dashboard</h1>
-    <p class="text-gray-400 text-sm mt-1">
-      Real-time USB Monitoring & Alerts
-    </p>
+    <h1 class="text-3xl font-bold">🛡 CyberMonitor</h1>
+    <p class="text-gray-400 text-sm">USB Monitoring & Security Dashboard</p>
   </div>
 
   <div class="flex gap-2">
-    <button onclick="downloadAgent()"
-      class="bg-blue-600 hover:bg-blue-700 transition px-4 py-2 rounded-lg text-sm font-semibold">
-      ⬇ Agent
-    </button>
-
-    <button onclick="downloadSetup()"
-      class="bg-indigo-600 hover:bg-indigo-700 transition px-4 py-2 rounded-lg text-sm font-semibold">
-      ⚙ Setup
-    </button>
-
-    <button onclick="logout()"
-      class="bg-red-600 hover:bg-red-700 transition px-4 py-2 rounded-lg text-sm font-semibold">
-      Logout
-    </button>
+    <button onclick="downloadAgent()" class="bg-blue-600 px-4 py-2 rounded-lg">⬇ Agent</button>
+    <button onclick="downloadSetup()" class="bg-indigo-600 px-4 py-2 rounded-lg">⚙ Setup</button>
+    <button onclick="logout()" class="bg-red-600 px-4 py-2 rounded-lg">Logout</button>
   </div>
 </div>
 
-<!-- USER INFO -->
-<div class="glass rounded-xl p-4 mb-5">
-  <p class="text-sm text-gray-400">
-    Logged in as
-    <span id="userEmail" class="text-cyan-400 font-medium"></span>
-  </p>
+<!-- TABS -->
+<div class="flex gap-2 mb-6">
+  <button class="tab-btn active px-4 py-2 rounded-lg" onclick="openTab('monitor')">Monitoring</button>
+  <button class="tab-btn px-4 py-2 rounded-lg" onclick="openTab('logs')">Logs</button>
+  <button class="tab-btn px-4 py-2 rounded-lg" onclick="openTab('profile')">Profile</button>
 </div>
 
-<!-- STATUS CARD -->
-<div class="glass rounded-xl p-5 mb-6" id="status">
-  Loading system status…
+<!-- MONITOR TAB -->
+<div id="monitor" class="tab glass p-5 rounded-xl">
+  <h2 class="text-xl font-semibold mb-4">Connected USB Devices</h2>
+  <table class="w-full text-sm">
+    <thead class="text-cyan-300 border-b border-gray-700">
+      <tr>
+        <th class="text-left py-2">Device</th>
+        <th class="text-left py-2">Risk</th>
+        <th class="text-left py-2">Time</th>
+      </tr>
+    </thead>
+    <tbody id="usbTable"></tbody>
+  </table>
 </div>
 
-<!-- USB TABLE -->
-<div class="glass rounded-xl p-5 mb-6">
-  <h2 class="text-xl font-semibold mb-3">Connected USB Devices</h2>
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead class="text-cyan-300 border-b border-gray-700">
-        <tr>
-          <th class="text-left py-2">Device</th>
-          <th class="text-left py-2">Risk</th>
-          <th class="text-left py-2">Timestamp</th>
-        </tr>
-      </thead>
-      <tbody id="usbTable"></tbody>
-    </table>
+<!-- LOGS TAB -->
+<div id="logs" class="tab glass p-5 rounded-xl hidden">
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+    <h2 class="text-xl font-semibold">USB Activity Logs</h2>
+
+    <div class="flex gap-2">
+      <input type="date" id="filterDate"
+        class="bg-black/40 border border-gray-700 rounded px-3 py-1 text-sm">
+      <button onclick="printLogs()" class="bg-green-600 px-3 py-1 rounded">🖨 Print</button>
+    </div>
   </div>
+
+  <div id="logBox" class="max-h-80 overflow-y-auto text-sm"></div>
 </div>
 
-<!-- LOGS -->
-<div class="glass rounded-xl p-5">
-  <h2 class="text-xl font-semibold mb-3">USB Activity Logs</h2>
-  <div id="logBox" class="max-h-64 overflow-y-auto text-sm"></div>
+<!-- PROFILE TAB -->
+<div id="profile" class="tab glass p-5 rounded-xl hidden">
+  <h2 class="text-xl font-semibold mb-4">Profile</h2>
+  <div id="profileInfo" class="text-sm grid md:grid-cols-2 gap-4"></div>
 </div>
 
 </div>
 
 <script>
-/* ---------------- FIREBASE CONFIG ---------------- */
+/* ---------------- FIREBASE ---------------- */
 const firebaseConfig = {
   apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
   authDomain: "cybermonitor-1ab3c.firebaseapp.com",
@@ -105,90 +99,94 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-/* ---------------- AUTH CHECK ---------------- */
+/* ---------------- AUTH ---------------- */
 const email = localStorage.getItem("login_email");
-if (!email) {
-  document.body.innerHTML =
-    "<h2 class='text-red-500 text-center mt-20'>Unauthorized – Please Login</h2>";
+if(!email){
+  document.body.innerHTML="<h2 class='text-center text-red-500 mt-20'>Unauthorized</h2>";
   throw new Error("Not logged in");
 }
-document.getElementById("userEmail").innerText = email;
+const uid = email.replace(/@/g,"_").replace(/\./g,"_");
 
-const uid = email.replace(/@/g, "_").replace(/\./g, "_");
+/* ---------------- NAV ---------------- */
+function openTab(tab){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.add("hidden"));
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+  document.getElementById(tab).classList.remove("hidden");
+  event.target.classList.add("active");
+}
 
-/* ---------------- BUTTONS ---------------- */
-function logout() {
+function logout(){
   localStorage.removeItem("login_email");
-  window.location.href = "login.html";
+  location.href="login.html";
 }
+function downloadAgent(){ location.href="monitor.py"; }
+function downloadSetup(){ location.href="setup_usb_monitor.bat"; }
 
-function downloadAgent() {
-  window.location.href = "monitor.py";
-}
-
-function downloadSetup() {
-  window.location.href = "setup_usb_monitor.bat";
-}
-
-/* ---------------- STATUS ---------------- */
-db.collection("users").doc(uid).onSnapshot(doc => {
-  const d = doc.data();
-  document.getElementById("status").innerHTML = `
-    <div class="grid md:grid-cols-2 gap-4 text-sm">
-      <div><b>Email:</b> ${d.email}</div>
-      <div><b>Machine:</b> ${d.machine}</div>
-      <div>
-        <b>Status:</b>
-        ${d.is_online
-          ? "<span class='text-green-400'>● Online</span>"
-          : "<span class='text-red-400'>● Offline</span>"}
-      </div>
-      <div><b>Last Seen:</b> ${new Date(d.last_seen).toLocaleString()}</div>
-    </div>
+/* ---------------- STATUS / PROFILE ---------------- */
+db.collection("users").doc(uid).onSnapshot(doc=>{
+  const d=doc.data();
+  document.getElementById("profileInfo").innerHTML=`
+    <div><b>Email:</b> ${d.email}</div>
+    <div><b>Machine:</b> ${d.machine}</div>
+    <div><b>Status:</b> ${d.is_online?"🟢 Online":"🔴 Offline"}</div>
+    <div><b>Last Seen:</b> ${new Date(d.last_seen).toLocaleString()}</div>
   `;
 });
 
-/* ---------------- USB TABLE ---------------- */
-db.collection("users").doc(uid)
-  .collection("usb_status")
-  .orderBy("timestamp", "desc")
-  .onSnapshot(snapshot => {
-    let html = "";
-    snapshot.forEach(doc => {
-      const d = doc.data();
-      html += `
-        <tr class="border-b border-gray-800 hover:bg-white/5">
-          <td class="py-2">${d.name}</td>
-          <td class="py-2">${d.risk}</td>
-          <td class="py-2">${new Date(d.timestamp).toLocaleString()}</td>
-        </tr>
-      `;
-    });
-    document.getElementById("usbTable").innerHTML =
-      html || "<tr><td colspan='3' class='py-3 text-gray-400'>No USB activity</td></tr>";
+/* ---------------- USB MONITOR ---------------- */
+db.collection("users").doc(uid).collection("usb_status")
+.orderBy("timestamp","desc")
+.onSnapshot(snap=>{
+  let html="";
+  snap.forEach(doc=>{
+    const d=doc.data();
+    html+=`
+      <tr class="border-b border-gray-800 hover:bg-white/5">
+        <td class="py-2">${d.name}</td>
+        <td class="py-2">${d.risk}</td>
+        <td class="py-2">${new Date(d.timestamp).toLocaleString()}</td>
+      </tr>`;
   });
+  document.getElementById("usbTable").innerHTML=
+    html||"<tr><td colspan='3' class='py-3 text-gray-400'>No USB activity</td></tr>";
+});
 
-/* ---------------- LOGS ---------------- */
-db.collection("users").doc(uid)
-  .collection("logs")
-  .orderBy("timestamp", "desc")
-  .limit(50)
-  .onSnapshot(snapshot => {
-    let html = "";
-    snapshot.forEach(doc => {
-      const d = doc.data();
-      html += `
-        <div class="mb-2">
-          <b>${d.event}</b> — ${d.device}<br>
-          <span class="text-xs text-gray-400">
-            ${new Date(d.timestamp).toLocaleString()}
-          </span>
-          <hr class="border-gray-800 mt-2">
-        </div>
-      `;
-    });
-    document.getElementById("logBox").innerHTML = html;
+/* ---------------- LOGS + FILTER ---------------- */
+let allLogs=[];
+
+db.collection("users").doc(uid).collection("logs")
+.orderBy("timestamp","desc")
+.onSnapshot(snap=>{
+  allLogs=[];
+  snap.forEach(doc=>allLogs.push(doc.data()));
+  renderLogs();
+});
+
+document.getElementById("filterDate").addEventListener("change",renderLogs);
+
+function renderLogs(){
+  const date=document.getElementById("filterDate").value;
+  let html="";
+  allLogs.forEach(d=>{
+    const logDate=new Date(d.timestamp).toISOString().split("T")[0];
+    if(date && logDate!==date) return;
+    html+=`
+      <div class="mb-2">
+        <b>${d.event}</b> — ${d.device}<br>
+        <span class="text-xs text-gray-400">${new Date(d.timestamp).toLocaleString()}</span>
+        <hr class="border-gray-800 mt-2">
+      </div>`;
   });
+  document.getElementById("logBox").innerHTML=
+    html||"<p class='text-gray-400'>No logs found</p>";
+}
+
+/* ---------------- PRINT ---------------- */
+function printLogs(){
+  const win=window.open("","","width=800,height=600");
+  win.document.write(`<h2>CyberMonitor USB Logs</h2>`+document.getElementById("logBox").innerHTML);
+  win.print();
+}
 </script>
 
 </body>
