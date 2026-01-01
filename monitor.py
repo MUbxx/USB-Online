@@ -6,7 +6,7 @@ import wmi
 from datetime import datetime, timezone
 from getpass import getpass
 
-API_KEY = "YOUR_FIREBASE_WEB_API_KEY"
+API_KEY = "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k"
 PROJECT_ID = "cybermonitor-1ab3c"
 
 print("=== CyberMonitor Agent v6.0 (Windows Stable) ===")
