@@ -2,7 +2,8 @@ import time
 import subprocess
 import re
 import os
-from datetime import datetime, timezone
+from datetime import datetime
+import pytz
 import smtplib
 from email.message import EmailMessage
 
@@ -13,6 +14,12 @@ from firebase_admin import credentials, firestore
 cred = credentials.Certificate("cybermonitor-1ab3c-firebase-adminsdk-fbsvc-e5d6987eba.json")
 firebase_admin.initialize_app(cred)
 db = firestore.client()
+
+# ================= TIMEZONE (LOCAL IST) =================
+IST = pytz.timezone("Asia/Kolkata")
+
+def now_ist():
+    return datetime.now(IST).isoformat()
 
 # ================= SMTP CONFIG =================
 SMTP_EMAIL = "mubeenmass577@gmail.com"
@@ -52,23 +59,28 @@ user_ref.set({
     "email": email,
     "machine": machine,
     "is_online": True,
-    "last_seen": datetime.now(timezone.utc).isoformat()
+    "last_seen": now_ist()
 }, merge=True)
 
-# ================= USB DEVICE NAME FIX =================
+# ================= TRUST CHECK =================
+def is_device_trusted(user_ref, device_name):
+    return user_ref.collection("trusted").document(device_name).get().exists
+
+# ================= DEVICE NAME FALLBACK =================
 VENDOR_MAP = {
+    "VID_0781": "SanDisk USB Storage",
+    "VID_0951": "Kingston USB Storage",
     "VID_22D9": "Realme Mobile Device",
     "VID_18D1": "Android Mobile Device",
     "VID_04E8": "Samsung Mobile Device",
-    "VID_0781": "SanDisk USB Storage",
-    "VID_0951": "Kingston USB Storage",
 }
 
-INTERNAL_VIDS = {"VID_8087"}  # Intel Bluetooth (ignore)
+INTERNAL_VIDS = {"VID_8087"}  # Intel Bluetooth
 
+# ================= USB ENUMERATION =================
 def get_usb_devices():
     result = subprocess.run(
-        ["wmic", "path", "Win32_PnPEntity", "get", "DeviceID"],
+        ["wmic", "path", "Win32_PnPEntity", "get", "DeviceID,Name"],
         capture_output=True,
         text=True
     )
@@ -76,26 +88,35 @@ def get_usb_devices():
     devices = {}
 
     for line in result.stdout.splitlines():
-        line = line.strip()
         if "USB\\VID_" not in line:
             continue
 
-        # Remove composite interface IDs
-        base_id = re.sub(r"&MI_\\d+", "", line)
+        parts = re.split(r"\s{2,}", line.strip(), maxsplit=1)
+        if len(parts) != 2:
+            continue
+
+        device_id, name = parts
+        device_id = device_id.strip()
+        name = name.strip()
+
+        # Remove composite interfaces
+        base_id = re.sub(r"&MI_\\d+", "", device_id)
 
         # Ignore internal USB
         if any(v in base_id for v in INTERNAL_VIDS):
             continue
 
-        vid_match = re.search(r"(VID_[0-9A-F]{4})", base_id)
-        vid = vid_match.group(1) if vid_match else None
+        # Clean name
+        if not name or "unknown" in name.lower():
+            vid_match = re.search(r"(VID_[0-9A-F]{4})", base_id)
+            vid = vid_match.group(1) if vid_match else None
+            name = VENDOR_MAP.get(vid, "Unknown USB Device")
 
-        device_name = VENDOR_MAP.get(vid, "Unknown USB Device")
-        devices[base_id] = device_name
+        devices[base_id] = name
 
     return devices
 
-# ================= BASELINE FIX =================
+# ================= BASELINE =================
 print("[*] Creating USB baseline (no alerts on startup)...")
 previous_devices = get_usb_devices()
 print(f"[*] Baseline ready ({len(previous_devices)} devices ignored)\n")
@@ -105,11 +126,11 @@ print("[+] USB monitoring started...\n")
 # ================= MAIN LOOP =================
 try:
     while True:
-        now = datetime.now(timezone.utc).isoformat()
+        timestamp = now_ist()
 
         user_ref.update({
             "is_online": True,
-            "last_seen": now
+            "last_seen": timestamp
         })
 
         current_devices = get_usb_devices()
@@ -123,27 +144,28 @@ try:
                 user_ref.collection("usb_status").add({
                     "name": device_name,
                     "risk": "MEDIUM",
-                    "timestamp": now
+                    "timestamp": timestamp
                 })
 
                 user_ref.collection("logs").add({
                     "event": "USB Connected",
                     "device": device_name,
-                    "timestamp": now
+                    "timestamp": timestamp
                 })
 
-                # -------- PROFESSIONAL EMAIL CONTENT --------
-                send_email_alert(
-                    email,
-                    "🚨 CyberMonitor Alert: USB Device Connected",
-                    f"""
+                # Email only if NOT trusted
+                if not is_device_trusted(user_ref, device_name):
+                    send_email_alert(
+                        email,
+                        "🚨 CyberMonitor Alert: USB Device Connected",
+                        f"""
 Hello,
 
 A USB device has been detected on your system.
 
 Device Name : {device_name}
 Machine     : {machine}
-Time        : {now}
+Time        : {timestamp}
 
 If this device was not connected by you, please disconnect it immediately.
 
@@ -153,7 +175,9 @@ https://mubxx.github.io/USB-Online/login.html
 Regards,
 CyberMonitor Security System
 """
-                )
+                    )
+                else:
+                    print(f"[INFO] {device_name} is trusted. Email skipped.")
 
         # USB REMOVED
         for dev in previous_devices:
@@ -164,7 +188,7 @@ CyberMonitor Security System
                 user_ref.collection("logs").add({
                     "event": "USB Removed",
                     "device": device_name,
-                    "timestamp": now
+                    "timestamp": timestamp
                 })
 
         previous_devices = current_devices
@@ -173,6 +197,6 @@ CyberMonitor Security System
 except KeyboardInterrupt:
     user_ref.update({
         "is_online": False,
-        "last_seen": datetime.now(timezone.utc).isoformat()
+        "last_seen": now_ist()
     })
     print("\n[!] Monitoring stopped")
