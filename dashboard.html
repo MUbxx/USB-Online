@@ -4,57 +4,46 @@
 <meta charset="UTF-8">
 <title>CyberMonitor Dashboard</title>
 
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
 <style>
-body {
-  font-family: Arial, sans-serif;
+body{
   background:#0f172a;
   color:white;
+  font-family: Arial;
   margin:0;
-  padding:0;
 }
 
-.header {
+.header{
   background:#020617;
-  padding:15px 25px;
+  padding:15px;
   font-size:20px;
   font-weight:bold;
 }
 
-.card {
+.card{
   background:#020617;
-  border-radius:12px;
-  padding:15px;
   margin:15px;
-  box-shadow:0 0 15px rgba(0,0,0,0.4);
+  padding:15px;
+  border-radius:12px;
 }
 
-.badge-online {color:#10b981;}
-.badge-offline {color:#ef4444;}
+.badge-online{color:#10b981;}
+.badge-offline{color:#ef4444;}
 
-table {
+table{
   width:100%;
   border-collapse:collapse;
 }
 
-th, td {
-  padding:8px;
+th,td{
   border-bottom:1px solid #1e293b;
-  font-size:14px;
+  padding:8px;
 }
-
-button {
-  padding:6px 10px;
-  border-radius:6px;
-  border:none;
-  cursor:pointer;
-}
-
-.allow-btn {background:#22c55e; color:white;}
-.block-btn {background:#ef4444; color:white;}
 </style>
-
-<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
 
 </head>
 <body>
@@ -62,7 +51,8 @@ button {
 <div class="header">CyberMonitor Dashboard</div>
 
 <div class="card">
-  <h3>User Status</h3>
+  <h3>User Session</h3>
+  <p><b>UID:</b> <span id="uid"></span></p>
   <p><b>Email:</b> <span id="email"></span></p>
   <p><b>Machine:</b> <span id="machine"></span></p>
   <p><b>Status:</b> <span id="status"></span></p>
@@ -70,13 +60,12 @@ button {
 </div>
 
 <div class="card">
-  <h3>Connected USB Devices</h3>
+  <h3>USB Devices</h3>
   <table id="usb_table">
     <tr>
       <th>Device Name</th>
       <th>Token</th>
       <th>PNP ID</th>
-      <th>Action</th>
     </tr>
   </table>
 </div>
@@ -87,7 +76,7 @@ button {
 </div>
 
 <script>
-/* ---------- FIREBASE CONFIG ---------- */
+/* ================== FIREBASE CONFIG ================== */
 const firebaseConfig = {
   apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
   authDomain: "cybermonitor-1ab3c.firebaseapp.com",
@@ -95,109 +84,116 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
 const db = firebase.firestore();
 
-/* ---------- GET USER UID ---------- */
-let uid = localStorage.getItem("uid");
-if (!uid) {
-  uid = prompt("Enter Firebase UID");
-  localStorage.setItem("uid", uid);
-}
+console.log("Firebase initialized");
 
-/* ---------- USER STATUS LISTENER ---------- */
-db.doc(`users/${uid}`).onSnapshot(doc => {
-  if (!doc.exists) return;
+/* ================== AUTH LISTENER ================== */
+auth.onAuthStateChanged(async user => {
 
-  const data = doc.data();
+  if (!user) {
+    alert("You are not logged in. Redirecting to login page.");
+    window.location.href = "login.html";
+    return;
+  }
 
-  document.getElementById("email").innerText = data.email || "";
-  document.getElementById("machine").innerText = data.machine || "";
-  document.getElementById("last_seen").innerText = data.last_seen || "";
+  const uid = user.uid;
+  document.getElementById("uid").innerText = uid;
+  document.getElementById("email").innerText = user.email;
 
-  document.getElementById("status").innerHTML =
-    data.is_online
-    ? "<span class='badge-online'>ONLINE</span>"
-    : "<span class='badge-offline'>OFFLINE</span>";
+  console.log("Logged in as:", uid);
+
+  startDashboard(uid);
 });
 
-/* ---------- USB DEVICE LIST ---------- */
-db.doc(`users/${uid}/status/usb_status`).onSnapshot(doc => {
-  const table = document.getElementById("usb_table");
+/* ================== DASHBOARD MAIN ================== */
+function startDashboard(uid){
 
-  // reset header
-  table.innerHTML =
-    "<tr><th>Device Name</th><th>Token</th><th>PNP ID</th><th>Action</th></tr>";
+  /* -------- USER STATUS -------- */
+  db.doc(`users/${uid}`).onSnapshot(doc => {
 
-  if (!doc.exists) return;
+    if (!doc.exists){
+      console.warn("User document missing");
+      return;
+    }
 
-  const values = doc.data().usb_devices?.values || [];
+    const d = doc.data();
 
-  values.forEach(v => {
-    const f = v.mapValue.fields;
+    document.getElementById("machine").innerText = d.machine || "Unknown";
 
-    const name = f.device_name?.stringValue || "Unknown";
-    const token = f.token?.stringValue || "N/A";
-    const pnp = f.pnp_id?.stringValue || "N/A";
+    document.getElementById("status").innerHTML =
+      d.is_online ? "<span class='badge-online'>ONLINE</span>"
+                  : "<span class='badge-offline'>OFFLINE</span>";
 
-    const row = document.createElement("tr");
+    document.getElementById("last_seen").innerText =
+      d.last_seen || "Unknown";
 
-    row.innerHTML = `
-      <td>${name}</td>
-      <td>${token}</td>
-      <td>${pnp}</td>
-      <td>
-        <button class="allow-btn" onclick="trust('${token}')">Trust</button>
-        <button class="block-btn" onclick="block('${token}')">Block</button>
-      </td>
-    `;
+  }, err => console.error(err));
 
-    table.appendChild(row);
-  });
-});
+  /* -------- USB DEVICE LIST -------- */
+  db.doc(`users/${uid}/status/usb_status`).onSnapshot(doc => {
 
-/* ---------- TRUST & BLOCK ---------- */
-function trust(token) {
-  db.collection(`users/${uid}/security/allowlist`).add({
-    token: token,
-    type: "ALLOW",
-    created: new Date()
-  });
-  alert("Trusted device saved");
-}
+    const table = document.getElementById("usb_table");
 
-function block(token) {
-  db.collection(`users/${uid}/security/allowlist`).add({
-    token: token,
-    type: "BLOCK",
-    created: new Date()
-  });
-  alert("Blocked device saved");
-}
+    table.innerHTML =
+      "<tr><th>Device Name</th><th>Token</th><th>PNP ID</th></tr>";
 
-/* ---------- LIVE SECURITY LOGS ---------- */
-db.collection(`users/${uid}/logs`)
-  .orderBy("timestamp", "desc")
-  .limit(25)
-  .onSnapshot(snap => {
+    if (!doc.exists){
+      console.warn("usb_status missing");
+      return;
+    }
 
-    const container = document.getElementById("logs");
-    container.innerHTML = "";
+    const arr = doc.data().usb_devices?.values || [];
 
-    snap.forEach(doc => {
-      const d = doc.data();
+    arr.forEach(v => {
+      const f = v.mapValue.fields;
 
-      const p = document.createElement("p");
+      const name = f.device_name?.stringValue || "Unknown";
+      const token = f.token?.stringValue || "N/A";
+      const pnp = f.pnp_id?.stringValue || "N/A";
 
-      let color = "#9ca3af";
-      if (d.severity === "HIGH") color = "#f97316";
-      if (d.severity === "CRITICAL") color = "#ef4444";
+      const row = document.createElement("tr");
 
-      p.style.color = color;
-      p.innerText = `[${d.timestamp}] ${d.message}`;
+      row.innerHTML = `
+        <td>${name}</td>
+        <td>${token}</td>
+        <td>${pnp}</td>
+      `;
 
-      container.appendChild(p);
+      table.appendChild(row);
     });
-});
+
+  }, err => console.error(err));
+
+  /* -------- LOG STREAM -------- */
+  db.collection(`users/${uid}/logs`)
+    .orderBy("timestamp", "desc")
+    .limit(30)
+    .onSnapshot(snapshot => {
+
+      const box = document.getElementById("logs");
+      box.innerHTML = "";
+
+      snapshot.forEach(doc => {
+
+        const d = doc.data();
+
+        const p = document.createElement("p");
+
+        let color = "#9ca3af";
+        if (d.severity === "HIGH") color = "#f97316";
+        if (d.severity === "CRITICAL") color = "#ef4444";
+
+        p.style.color = color;
+        p.innerText = `[${d.timestamp}] ${d.message}`;
+
+        box.appendChild(p);
+      });
+
+    }, err => console.error(err));
+}
 </script>
 
 </body>
