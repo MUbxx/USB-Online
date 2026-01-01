@@ -5,27 +5,19 @@
 <title>CyberMonitor Dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<!-- Tailwind -->
 <script src="https://cdn.tailwindcss.com"></script>
-
-<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <style>
-body{
-  background:#020617;
-  color:#e5e7eb;
-  font-family:Segoe UI, Arial;
-}
-.card{
+body { background:#020617; color:#e5e7eb; }
+.card {
   background:#020c1b;
   padding:18px;
   border-radius:14px;
   margin-bottom:18px;
-  box-shadow:0 0 18px rgba(0,255,255,0.08);
 }
-.logs{
+.logs {
   max-height:260px;
   overflow-y:auto;
   background:#020617;
@@ -37,24 +29,34 @@ body{
 
 <body class="min-h-screen">
 
-<div class="max-w-5xl mx-auto p-6">
+<div class="max-w-6xl mx-auto p-6">
 
-<h1 class="text-3xl font-bold mb-4">🖥 CyberMonitor Dashboard</h1>
+<div class="flex justify-between items-center mb-4">
+  <h1 class="text-3xl font-bold">🖥 CyberMonitor Dashboard</h1>
+  <div class="space-x-2">
+    <button onclick="downloadAgent()" class="bg-blue-600 px-4 py-2 rounded">
+      ⬇ Download Monitor
+    </button>
+    <button onclick="logout()" class="bg-red-600 px-4 py-2 rounded">
+      Logout
+    </button>
+  </div>
+</div>
 
 <p class="text-gray-400 mb-4">
-Logged in as: <span id="userEmail" class="text-cyan-400"></span>
+Logged in as <span id="userEmail" class="text-cyan-400"></span>
 </p>
 
 <div class="card" id="status">Loading status…</div>
 
 <div class="card">
-  <h2 class="text-xl mb-2 font-semibold">Connected USB Devices</h2>
+  <h2 class="text-xl mb-2">Connected USB Devices</h2>
   <table class="w-full text-sm">
-    <thead>
-      <tr class="text-cyan-300">
-        <th class="text-left p-1">Device</th>
-        <th class="text-left p-1">Risk</th>
-        <th class="text-left p-1">Timestamp</th>
+    <thead class="text-cyan-300">
+      <tr>
+        <th>Device</th>
+        <th>Risk</th>
+        <th>Time</th>
       </tr>
     </thead>
     <tbody id="usbTable"></tbody>
@@ -62,19 +64,13 @@ Logged in as: <span id="userEmail" class="text-cyan-400"></span>
 </div>
 
 <div class="card">
-  <h2 class="text-xl mb-2 font-semibold">USB Event Logs</h2>
-  <div id="logBox" class="logs text-sm">Loading logs…</div>
+  <h2 class="text-xl mb-2">USB Logs</h2>
+  <div id="logBox" class="logs"></div>
 </div>
-
-<button onclick="logout()"
- class="mt-3 bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg">
-Logout
-</button>
 
 </div>
 
 <script>
-/* ---------------- FIREBASE CONFIG ---------------- */
 const firebaseConfig = {
   apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
   authDomain: "cybermonitor-1ab3c.firebaseapp.com",
@@ -84,34 +80,27 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-/* ---------------- GET EMAIL FROM LOGIN ---------------- */
 const email = localStorage.getItem("login_email");
-
 if(!email){
-  document.body.innerHTML = "<h2 style='color:red;text-align:center;margin-top:40px'>Not Authorized — Please Login First</h2>";
-  throw new Error("No login email found");
+  document.body.innerHTML = "<h2 class='text-red-500 text-center mt-20'>Unauthorized</h2>";
+  throw new Error("Not logged in");
 }
-
 document.getElementById("userEmail").innerText = email;
 
-/* convert email → UID (same as Python script) */
 const uid = email.replace(/@/g,"_").replace(/\./g,"_");
 
-/* ---------------- LOGOUT ---------------- */
 function logout(){
   localStorage.removeItem("login_email");
   window.location.href = "login.html";
 }
 
-/* ---------------- STATUS CARD ---------------- */
+function downloadAgent(){
+  window.location.href = "monitor.py"; // host this file
+}
+
+// STATUS
 db.collection("users").doc(uid).onSnapshot(doc=>{
-  if(!doc.exists){
-    document.getElementById("status").innerHTML = "<span style='color:red'>User not found in database.</span>";
-    return;
-  }
-
   const d = doc.data();
-
   document.getElementById("status").innerHTML = `
     <b>Email:</b> ${d.email}<br>
     <b>Machine:</b> ${d.machine}<br>
@@ -120,36 +109,34 @@ db.collection("users").doc(uid).onSnapshot(doc=>{
   `;
 });
 
-/* ---------------- USB DEVICES ---------------- */
+// USB TABLE
 db.collection("users").doc(uid).collection("usb_status")
-.orderBy("timestamp","desc").onSnapshot(snapshot=>{
+.orderBy("timestamp","desc").onSnapshot(snap=>{
   let html="";
-  snapshot.forEach(doc=>{
+  snap.forEach(doc=>{
     const d = doc.data();
-    html += `
-      <tr>
-        <td class="p-1">${d.name}</td>
-        <td class="p-1">${d.risk}</td>
-        <td class="p-1">${new Date(d.timestamp).toLocaleString()}</td>
-      </tr>`;
+    html += `<tr>
+      <td>${d.name}</td>
+      <td>${d.risk}</td>
+      <td>${new Date(d.timestamp).toLocaleString()}</td>
+    </tr>`;
   });
-  document.getElementById("usbTable").innerHTML = html || `<tr><td colspan="3">No USB records</td></tr>`;
+  document.getElementById("usbTable").innerHTML = html || "<tr><td colspan=3>No devices</td></tr>";
 });
 
-/* ---------------- LOGS ---------------- */
+// LOGS
 db.collection("users").doc(uid).collection("logs")
-.orderBy("timestamp","desc").limit(50).onSnapshot(snapshot=>{
+.orderBy("timestamp","desc").limit(50).onSnapshot(snap=>{
   let html="";
-  snapshot.forEach(doc=>{
+  snap.forEach(doc=>{
     const d = doc.data();
-    html += `
-      <div class="mb-1">
-        <b>${d.event}</b> — ${d.device}<br>
-        <span class="text-gray-400 text-xs">${new Date(d.timestamp).toLocaleString()}</span>
-        <hr class="border-gray-700 mt-1">
-      </div>`;
+    html += `<div>
+      <b>${d.event}</b> — ${d.device}<br>
+      <span class="text-xs text-gray-400">${new Date(d.timestamp).toLocaleString()}</span>
+      <hr class="border-gray-700 my-1">
+    </div>`;
   });
-  document.getElementById("logBox").innerHTML = html || "No logs yet.";
+  document.getElementById("logBox").innerHTML = html;
 });
 </script>
 
