@@ -4,35 +4,42 @@
 <meta charset="UTF-8">
 <title>CyberMonitor Dashboard</title>
 
-<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <style>
 body{
-  background:#0f172a;
+  background:#020617;
   color:white;
-  font-family: Arial;
+  font-family: Inter, Arial;
   margin:0;
 }
 
 .header{
   background:#020617;
-  padding:15px;
-  font-size:20px;
-  font-weight:bold;
+  padding:18px 25px;
+  font-size:22px;
+  font-weight:900;
+  border-bottom:1px solid #0f172a;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
 }
 
 .card{
-  background:#020617;
+  background:rgba(15,23,42,.75);
   margin:15px;
   padding:15px;
-  border-radius:12px;
+  border-radius:18px;
+  box-shadow:0 0 25px rgba(0,0,0,0.4);
+  border:1px solid #1f2937;
 }
 
-.badge-online{color:#10b981;}
-.badge-offline{color:#ef4444;}
+.badge-online{color:#10b981;font-weight:bold;}
+.badge-offline{color:#ef4444;font-weight:bold;}
 
 table{
   width:100%;
@@ -41,33 +48,45 @@ table{
 
 th,td{
   border-bottom:1px solid #1e293b;
-  padding:8px;
+  padding:10px;
+  font-size:14px;
+}
+
+.time{
+  font-family: monospace;
+  color:#a5b4fc;
+}
+.logitem{
+  margin:4px 0;
 }
 </style>
 
 </head>
 <body>
 
-<div class="header">CyberMonitor Dashboard</div>
+<div class="header">CyberMonitor — Live Security Dashboard</div>
+
+<div class="grid">
 
 <div class="card">
-  <h3>User Session</h3>
-  <p><b>UID:</b> <span id="uid"></span></p>
+  <h3>User / Device Status</h3>
+
   <p><b>Email:</b> <span id="email"></span></p>
   <p><b>Machine:</b> <span id="machine"></span></p>
   <p><b>Status:</b> <span id="status"></span></p>
-  <p><b>Last Seen:</b> <span id="last_seen"></span></p>
+  <p><b>Last Seen:</b> <span id="last_seen" class="time"></span></p>
 </div>
 
 <div class="card">
-  <h3>USB Devices</h3>
+  <h3>Connected External USB Devices</h3>
   <table id="usb_table">
     <tr>
       <th>Device Name</th>
       <th>Token</th>
-      <th>PNP ID</th>
     </tr>
   </table>
+</div>
+
 </div>
 
 <div class="card">
@@ -76,11 +95,10 @@ th,td{
 </div>
 
 <script>
-/* ================== FIREBASE CONFIG ================== */
 const firebaseConfig = {
-  apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
-  authDomain: "cybermonitor-1ab3c.firebaseapp.com",
-  projectId: "cybermonitor-1ab3c"
+  apiKey:"AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
+  authDomain:"cybermonitor-1ab3c.firebaseapp.com",
+  projectId:"cybermonitor-1ab3c"
 };
 
 firebase.initializeApp(firebaseConfig);
@@ -88,111 +106,91 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-console.log("Firebase initialized");
-
-/* ================== AUTH LISTENER ================== */
-auth.onAuthStateChanged(async user => {
-
-  if (!user) {
-    alert("You are not logged in. Redirecting to login page.");
-    window.location.href = "login.html";
-    return;
-  }
-
-  const uid = user.uid;
-  document.getElementById("uid").innerText = uid;
-  document.getElementById("email").innerText = user.email;
-
-  console.log("Logged in as:", uid);
-
-  startDashboard(uid);
+auth.onAuthStateChanged(user=>{
+  if(!user){window.location="login.html";return;}
+  start(user.uid,user.email);
 });
 
-/* ================== DASHBOARD MAIN ================== */
-function startDashboard(uid){
+function toIST(utcString){
+  let d = new Date(utcString);
+  let IST = new Date(d.getTime() + 5.5*60*60*1000);
 
-  /* -------- USER STATUS -------- */
-  db.doc(`users/${uid}`).onSnapshot(doc => {
+  let dd = String(IST.getDate()).padStart(2,'0');
+  let mm = String(IST.getMonth()+1).padStart(2,'0');
+  let yy = IST.getFullYear();
 
-    if (!doc.exists){
-      console.warn("User document missing");
-      return;
-    }
+  let hh = String(IST.getHours()).padStart(2,'0');
+  let mi = String(IST.getMinutes()).padStart(2,'0');
+  let ss = String(IST.getSeconds()).padStart(2,'0');
 
-    const d = doc.data();
+  return `${dd}.${mm}.${yy} ${hh}:${mi}:${ss}`;
+}
+
+function start(uid,email){
+
+  document.getElementById("email").innerText=email;
+
+  db.doc(`users/${uid}`).onSnapshot(doc=>{
+    if(!doc.exists) return;
+
+    let d = doc.data();
 
     document.getElementById("machine").innerText = d.machine || "Unknown";
 
-    document.getElementById("status").innerHTML =
-      d.is_online ? "<span class='badge-online'>ONLINE</span>"
-                  : "<span class='badge-offline'>OFFLINE</span>";
+    // ONLINE logic based on last_seen
+    let last = new Date(d.last_seen);
+    let now = new Date();
+    let diff = (now - last)/1000;
 
-    document.getElementById("last_seen").innerText =
-      d.last_seen || "Unknown";
+    if(diff < 10)
+      document.getElementById("status").innerHTML="<span class='badge-online'>ONLINE</span>";
+    else
+      document.getElementById("status").innerHTML="<span class='badge-offline'>OFFLINE</span>";
 
-  }, err => console.error(err));
+    document.getElementById("last_seen").innerText = toIST(d.last_seen);
+  });
 
-  /* -------- USB DEVICE LIST -------- */
-  db.doc(`users/${uid}/status/usb_status`).onSnapshot(doc => {
-
+  db.doc(`users/${uid}/status/usb_status`).onSnapshot(doc=>{
     const table = document.getElementById("usb_table");
+    table.innerHTML="<tr><th>Device Name</th><th>Token</th></tr>";
 
-    table.innerHTML =
-      "<tr><th>Device Name</th><th>Token</th><th>PNP ID</th></tr>";
+    if(!doc.exists) return;
 
-    if (!doc.exists){
-      console.warn("usb_status missing");
-      return;
-    }
+    let arr = doc.data().usb_devices?.values || [];
 
-    const arr = doc.data().usb_devices?.values || [];
-
-    arr.forEach(v => {
-      const f = v.mapValue.fields;
-
-      const name = f.device_name?.stringValue || "Unknown";
-      const token = f.token?.stringValue || "N/A";
-      const pnp = f.pnp_id?.stringValue || "N/A";
-
-      const row = document.createElement("tr");
-
-      row.innerHTML = `
-        <td>${name}</td>
-        <td>${token}</td>
-        <td>${pnp}</td>
+    arr.forEach(v=>{
+      let f=v.mapValue.fields;
+      let row=document.createElement("tr");
+      row.innerHTML=`
+        <td>${f.device_name.stringValue}</td>
+        <td>${f.token.stringValue}</td>
       `;
-
       table.appendChild(row);
     });
 
-  }, err => console.error(err));
+  });
 
-  /* -------- LOG STREAM -------- */
   db.collection(`users/${uid}/logs`)
-    .orderBy("timestamp", "desc")
-    .limit(30)
-    .onSnapshot(snapshot => {
+   .orderBy("timestamp","desc")
+   .limit(25)
+   .onSnapshot(snap=>{
+      const box=document.getElementById("logs");
+      box.innerHTML="";
 
-      const box = document.getElementById("logs");
-      box.innerHTML = "";
+      snap.forEach(doc=>{
+        let d=doc.data();
+        let div=document.createElement("div");
+        div.className="logitem";
 
-      snapshot.forEach(doc => {
+        let color="#9ca3af";
+        if(d.severity==="HIGH")color="#f97316";
+        if(d.severity==="CRITICAL")color="#ef4444";
 
-        const d = doc.data();
-
-        const p = document.createElement("p");
-
-        let color = "#9ca3af";
-        if (d.severity === "HIGH") color = "#f97316";
-        if (d.severity === "CRITICAL") color = "#ef4444";
-
-        p.style.color = color;
-        p.innerText = `[${d.timestamp}] ${d.message}`;
-
-        box.appendChild(p);
+        div.style.color=color;
+        div.innerText=`${toIST(d.timestamp)} - ${d.message}`;
+        box.appendChild(div);
       });
-
-    }, err => console.error(err));
+   });
 }
 </script>
 
