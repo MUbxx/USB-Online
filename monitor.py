@@ -15,9 +15,8 @@ cred = credentials.Certificate("cybermonitor-1ab3c-firebase-adminsdk-fbsvc-e5d69
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-# ================= TIMEZONE (LOCAL IST) =================
+# ================= TIMEZONE (IST) =================
 IST = pytz.timezone("Asia/Kolkata")
-
 def now_ist():
     return datetime.now(IST).isoformat()
 
@@ -26,8 +25,7 @@ SMTP_EMAIL = "mubeenmass577@gmail.com"
 SMTP_PASSWORD = os.getenv("USB_MONITOR_APP_PASSWORD")
 
 if not SMTP_PASSWORD:
-    print("[FATAL] SMTP password not found.")
-    print("Run: set USB_MONITOR_APP_PASSWORD=YOUR_APP_PASSWORD")
+    print("[FATAL] Set USB_MONITOR_APP_PASSWORD")
     exit(1)
 
 def send_email_alert(to_email, subject, message):
@@ -49,9 +47,7 @@ def send_email_alert(to_email, subject, message):
 # ================= USER INPUT =================
 email = input("Enter your email: ").strip()
 machine = input("Enter machine name: ").strip()
-
 UID = email.replace("@", "_").replace(".", "_")
-print(f"[+] UID: {UID}")
 
 user_ref = db.collection("users").document(UID)
 
@@ -62,18 +58,18 @@ user_ref.set({
     "last_seen": now_ist()
 }, merge=True)
 
-# ================= DEVICE NAME FALLBACK =================
-VENDOR_MAP = {
-    "VID_0781": "SanDisk USB Storage",
-    "VID_0951": "Kingston USB Storage",
-    "VID_22D9": "Realme Mobile Device",
-    "VID_18D1": "Android Mobile Device",
-    "VID_04E8": "Samsung Mobile Device",
-}
+# ================= USB FILTER RULES =================
+IGNORE_NAMES = [
+    "USB Composite Device",
+    "MIDI",
+    "Interface",
+    "ADB",
+    "Generic",
+]
 
 INTERNAL_VIDS = {"VID_8087"}  # Intel Bluetooth
 
-# ================= USB ENUMERATION =================
+# ================= USB ENUMERATION (LOGICAL DEVICE ONLY) =================
 def get_usb_devices():
     result = subprocess.run(
         ["wmic", "path", "Win32_PnPEntity", "get", "DeviceID,Name"],
@@ -81,7 +77,7 @@ def get_usb_devices():
         text=True
     )
 
-    devices = {}
+    logical_devices = {}
 
     for line in result.stdout.splitlines():
         if "USB\\VID_" not in line:
@@ -92,28 +88,29 @@ def get_usb_devices():
             continue
 
         device_id, name = parts
-        device_id = device_id.strip()
         name = name.strip()
 
-        # Remove composite interfaces
-        base_id = re.sub(r"&MI_\\d+", "", device_id)
-
-        # Ignore internal USB devices
-        if any(v in base_id for v in INTERNAL_VIDS):
+        # Ignore noisy interface names
+        if any(x.lower() in name.lower() for x in IGNORE_NAMES):
             continue
 
-        # Clean device name
-        if not name or "unknown" in name.lower():
-            vid_match = re.search(r"(VID_[0-9A-F]{4})", base_id)
-            vid = vid_match.group(1) if vid_match else None
-            name = VENDOR_MAP.get(vid, "Unknown USB Device")
+        vid_pid = re.search(r"(VID_[0-9A-F]{4}&PID_[0-9A-F]{4})", device_id)
+        if not vid_pid:
+            continue
 
-        devices[base_id] = name
+        key = vid_pid.group(1)
 
-    return devices
+        # Ignore internal USB
+        if any(v in key for v in INTERNAL_VIDS):
+            continue
+
+        # Keep best readable name
+        logical_devices[key] = name
+
+    return logical_devices
 
 # ================= BASELINE =================
-print("[*] Creating USB baseline (existing devices ignored)...")
+print("[*] Creating baseline (existing devices ignored)...")
 previous_devices = get_usb_devices()
 print(f"[*] Baseline ready ({len(previous_devices)} devices)\n")
 
@@ -131,21 +128,21 @@ try:
 
         current_devices = get_usb_devices()
 
-        # USB CONNECTED
+        # CONNECTED
         for dev in current_devices:
             if dev not in previous_devices:
-                device_name = current_devices[dev]
-                print(f"[USB +] {device_name}")
+                name = current_devices[dev]
+                print(f"[USB +] {name}")
 
-                user_ref.collection("usb_status").add({
-                    "name": device_name,
+                user_ref.collection("usb_status").document(dev).set({
+                    "name": name,
                     "risk": "MEDIUM",
                     "timestamp": timestamp
                 })
 
                 user_ref.collection("logs").add({
                     "event": "USB Connected",
-                    "device": device_name,
+                    "device": name,
                     "timestamp": timestamp
                 })
 
@@ -155,31 +152,28 @@ try:
                     f"""
 Hello,
 
-A USB device has been detected on your system.
+A USB device has been connected.
 
-Device Name : {device_name}
-Machine     : {machine}
-Time        : {timestamp}
+Device  : {name}
+Machine : {machine}
+Time    : {timestamp}
 
-If this device was not connected by you, please disconnect it immediately.
-
-For more details and activity logs, log in to your CyberMonitor dashboard:
+View details:
 https://mubxx.github.io/USB-Online/login.html
-
-Regards,
-CyberMonitor Security System
 """
                 )
 
-        # USB REMOVED
+        # REMOVED
         for dev in previous_devices:
             if dev not in current_devices:
-                device_name = previous_devices[dev]
-                print(f"[USB -] {device_name}")
+                name = previous_devices[dev]
+                print(f"[USB -] {name}")
+
+                user_ref.collection("usb_status").document(dev).delete()
 
                 user_ref.collection("logs").add({
                     "event": "USB Removed",
-                    "device": device_name,
+                    "device": name,
                     "timestamp": timestamp
                 })
 
