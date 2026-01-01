@@ -5,10 +5,7 @@
 <title>CyberMonitor Dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<!-- Tailwind -->
 <script src="https://cdn.tailwindcss.com"></script>
-
-<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
@@ -27,11 +24,6 @@ body{
 .tab-btn.active{
   background:#2563eb;
 }
-.badge{
-  padding:2px 8px;
-  border-radius:999px;
-  font-size:11px;
-}
 </style>
 </head>
 
@@ -40,22 +32,55 @@ body{
 <div class="max-w-7xl mx-auto p-6">
 
 <!-- HEADER -->
-<div class="flex justify-between items-center mb-6">
+<div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+
   <div>
     <h1 class="text-3xl font-bold">🛡 CyberMonitor</h1>
-    <p class="text-gray-400 text-sm">USB Endpoint Monitoring Dashboard</p>
+    <p class="text-gray-400 text-sm">USB Monitoring Dashboard</p>
   </div>
-  <button onclick="logout()" class="bg-red-600 px-4 py-2 rounded-lg">
-    Logout
-  </button>
+
+  <!-- ACTION BUTTONS -->
+  <div class="flex flex-wrap gap-2">
+    <a href="https://mubxx.github.io/USB-Online/agent/monitor.py"
+       download
+       class="bg-sky-600 hover:bg-sky-700 px-4 py-2 rounded-lg text-sm font-medium">
+      Download Agent
+    </a>
+
+    <a href="https://mubxx.github.io/USB-Online/agent/setup.bat"
+       download
+       class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg text-sm font-medium">
+      Setup (.bat)
+    </a>
+
+    <button onclick="exportCSV()"
+            class="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg text-sm">
+      Export CSV
+    </button>
+
+    <button onclick="printLogs()"
+            class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg text-sm">
+      Print Logs
+    </button>
+
+    <button onclick="logout()"
+            class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm">
+      Logout
+    </button>
+  </div>
 </div>
 
 <!-- TABS -->
-<div class="flex flex-wrap gap-2 mb-6">
-  <button class="tab-btn active px-4 py-2 rounded-lg" onclick="openTab('monitor')">Monitoring</button>
-  <button class="tab-btn px-4 py-2 rounded-lg" onclick="openTab('logs')">Logs</button>
-  <button class="tab-btn px-4 py-2 rounded-lg" onclick="openTab('profile')">Profile</button>
-  <button class="tab-btn px-4 py-2 rounded-lg" onclick="openTab('whitelist')">Whitelist</button>
+<div class="flex gap-2 mb-6">
+  <button class="tab-btn active px-4 py-2 rounded-lg" onclick="openTab('monitor')">
+    Monitoring
+  </button>
+  <button class="tab-btn px-4 py-2 rounded-lg" onclick="openTab('logs')">
+    Logs
+  </button>
+  <button class="tab-btn px-4 py-2 rounded-lg" onclick="openTab('profile')">
+    Profile
+  </button>
 </div>
 
 <!-- MONITOR TAB -->
@@ -66,7 +91,7 @@ body{
       <tr>
         <th class="text-left py-2">Device</th>
         <th class="text-left py-2">Risk</th>
-        <th class="text-right py-2">Action</th>
+        <th class="text-left py-2">Time</th>
       </tr>
     </thead>
     <tbody id="usbTable"></tbody>
@@ -75,26 +100,20 @@ body{
 
 <!-- LOGS TAB -->
 <div id="logs" class="tab card p-5 hidden">
-  <div class="flex justify-between mb-4">
-    <h2 class="text-xl font-semibold">USB Session Logs</h2>
-    <div class="flex gap-2">
-      <button onclick="exportCSV()" class="bg-emerald-600 px-3 py-1 rounded">CSV</button>
-      <button onclick="printLogs()" class="bg-indigo-600 px-3 py-1 rounded">Print</button>
-    </div>
-  </div>
+  <h2 class="text-xl font-semibold mb-4">USB Activity Logs</h2>
   <div id="logBox" class="max-h-96 overflow-y-auto text-sm"></div>
 </div>
 
 <!-- PROFILE TAB -->
 <div id="profile" class="tab card p-6 hidden">
-  <h2 class="text-2xl font-semibold mb-4">User Profile</h2>
+  <h2 class="text-2xl font-semibold mb-4">Profile</h2>
   <div class="grid md:grid-cols-2 gap-4 text-sm">
     <div class="bg-black/30 p-4 rounded">
       <p class="text-gray-400 text-xs">Email</p>
       <p id="pEmail" class="font-medium"></p>
     </div>
     <div class="bg-black/30 p-4 rounded">
-      <p class="text-gray-400 text-xs">Machine Name</p>
+      <p class="text-gray-400 text-xs">Machine</p>
       <p id="pMachine" class="font-medium"></p>
     </div>
     <div class="bg-black/30 p-4 rounded">
@@ -108,25 +127,10 @@ body{
   </div>
 </div>
 
-<!-- WHITELIST TAB -->
-<div id="whitelist" class="tab card p-5 hidden">
-  <h2 class="text-xl font-semibold mb-4">Trusted USB Devices</h2>
-  <table class="w-full text-sm">
-    <thead class="border-b border-gray-700 text-cyan-300">
-      <tr>
-        <th class="text-left py-2">Device Name</th>
-        <th class="text-left py-2">Trusted On</th>
-        <th class="text-right py-2">Action</th>
-      </tr>
-    </thead>
-    <tbody id="whitelistTable"></tbody>
-  </table>
-</div>
-
 </div>
 
 <script>
-/* ---------------- FIREBASE INIT ---------------- */
+/* ---------------- FIREBASE ---------------- */
 firebase.initializeApp({
   apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
   authDomain: "cybermonitor-1ab3c.firebaseapp.com",
@@ -151,127 +155,73 @@ function logout(){
   location.href="login.html";
 }
 
-/* ---------------- TRUST MANAGEMENT ---------------- */
-function trustDevice(name){
-  db.collection("users").doc(uid)
-    .collection("trusted").doc(name)
-    .set({ trusted:true, added:new Date().toISOString() });
-}
-function removeTrusted(name){
-  db.collection("users").doc(uid)
-    .collection("trusted").doc(name).delete();
-}
-
 /* ---------------- USB MONITOR ---------------- */
 db.collection("users").doc(uid).collection("usb_status")
 .orderBy("timestamp","desc")
 .onSnapshot(snap=>{
   let html="";
   snap.forEach(doc=>{
-    const d=doc.data();
-    html+=`
+    const d = doc.data();
+    html += `
       <tr class="border-b border-gray-800">
         <td class="py-2">${d.name}</td>
-        <td class="py-2">
-          <span class="badge bg-yellow-600">${d.risk}</span>
-        </td>
-        <td class="py-2 text-right">
-          <button onclick="trustDevice('${d.name}')"
-            class="bg-green-600 px-2 py-1 rounded text-xs">
-            Trust
-          </button>
-        </td>
+        <td class="py-2">${d.risk}</td>
+        <td class="py-2">${new Date(d.timestamp).toLocaleString()}</td>
       </tr>`;
   });
   usbTable.innerHTML =
-    html || "<tr><td colspan='3' class='py-3 text-gray-400'>No devices</td></tr>";
+    html || "<tr><td colspan='3' class='py-3 text-gray-400'>No USB devices</td></tr>";
 });
 
-/* ---------------- WHITELIST VIEW ---------------- */
-db.collection("users").doc(uid).collection("trusted")
+/* ---------------- LOGS ---------------- */
+let logs = [];
+db.collection("users").doc(uid).collection("logs")
+.orderBy("timestamp","desc")
 .onSnapshot(snap=>{
+  logs = [];
   let html="";
   snap.forEach(doc=>{
-    const d=doc.data();
-    html+=`
-      <tr class="border-b border-gray-800">
-        <td class="py-2">${doc.id}</td>
-        <td class="py-2">${new Date(d.added).toLocaleString()}</td>
-        <td class="py-2 text-right">
-          <button onclick="removeTrusted('${doc.id}')"
-            class="bg-red-600 px-2 py-1 rounded text-xs">
-            Remove
-          </button>
-        </td>
-      </tr>`;
+    const d = doc.data();
+    logs.push(d);
+    html += `
+      <div class="mb-3">
+        <b>${d.event}</b> — ${d.device}<br>
+        <span class="text-xs text-gray-400">
+          ${new Date(d.timestamp).toLocaleString()}
+        </span>
+        <hr class="border-gray-800 mt-2">
+      </div>`;
   });
-  whitelistTable.innerHTML =
-    html || "<tr><td colspan='3' class='py-3 text-gray-400'>No trusted devices</td></tr>";
+  logBox.innerHTML = html || "<p class='text-gray-400'>No logs found</p>";
 });
 
-/* ---------------- LOGS (SESSION VIEW) ---------------- */
-let logs=[];
-db.collection("users").doc(uid).collection("logs")
-.orderBy("timestamp","asc")
-.onSnapshot(snap=>{
-  logs=[];
-  snap.forEach(doc=>logs.push(doc.data()));
-  renderLogs();
-});
-
-function renderLogs(){
-  let html="";
-  let sessions={};
-
-  logs.forEach(l=>{
-    if(l.event==="USB Connected"){
-      sessions[l.device]={start:new Date(l.timestamp)};
-    }
-    if(l.event==="USB Removed" && sessions[l.device]){
-      const start=sessions[l.device].start;
-      const end=new Date(l.timestamp);
-      const mins=Math.round((end-start)/60000);
-      html+=`
-        <div class="mb-3">
-          <b>${l.device}</b><br>
-          <span class="text-sm">Duration: ${mins} minutes</span><br>
-          <span class="text-xs text-gray-400">
-            ${start.toLocaleString()} → ${end.toLocaleString()}
-          </span>
-          <hr class="border-gray-800 mt-2">
-        </div>`;
-      delete sessions[l.device];
-    }
-  });
-  logBox.innerHTML =
-    html || "<p class='text-gray-400'>No completed sessions</p>";
-}
-
-/* ---------------- EXPORT / PRINT ---------------- */
+/* ---------------- EXPORT CSV ---------------- */
 function exportCSV(){
-  let csv="Device,Start,End,Duration(min)\n";
-  document.querySelectorAll("#logBox b").forEach(b=>{
-    csv+=`${b.innerText}\n`;
+  let csv = "Event,Device,Time\n";
+  logs.forEach(l=>{
+    csv += `${l.event},${l.device},${new Date(l.timestamp).toLocaleString()}\n`;
   });
-  const blob=new Blob([csv],{type:"text/csv"});
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download="usb_sessions.csv";
+  const blob = new Blob([csv], {type:"text/csv"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "usb_logs.csv";
   a.click();
 }
+
+/* ---------------- PRINT ---------------- */
 function printLogs(){
-  const w=window.open("");
-  w.document.write("<h2>CyberMonitor USB Sessions</h2>"+logBox.innerHTML);
+  const w = window.open("");
+  w.document.write("<h2>CyberMonitor USB Logs</h2>" + logBox.innerHTML);
   w.print();
 }
 
 /* ---------------- PROFILE ---------------- */
 db.collection("users").doc(uid).onSnapshot(doc=>{
-  const d=doc.data();
-  pEmail.innerText=d.email;
-  pMachine.innerText=d.machine;
-  pStatus.innerText=d.is_online?"🟢 Online":"🔴 Offline";
-  pLastSeen.innerText=new Date(d.last_seen).toLocaleString();
+  const d = doc.data();
+  pEmail.innerText = d.email;
+  pMachine.innerText = d.machine;
+  pStatus.innerText = d.is_online ? "🟢 Online" : "🔴 Offline";
+  pLastSeen.innerText = new Date(d.last_seen).toLocaleString();
 });
 </script>
 
