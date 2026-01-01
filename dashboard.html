@@ -10,18 +10,28 @@
 
 <style>
 body{
-  background:#020617;
+  background:#0b1220;
   color:white;
-  font-family: Inter, Arial;
+  font-family: Arial;
   margin:0;
 }
 
-.header{
+.topbar{
   background:#020617;
-  padding:18px 25px;
-  font-size:22px;
-  font-weight:900;
-  border-bottom:1px solid #0f172a;
+  padding:12px 18px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-size:18px;
+}
+
+button{
+  background:#2563eb;
+  color:white;
+  border:none;
+  padding:8px 12px;
+  border-radius:8px;
+  cursor:pointer;
 }
 
 .grid{
@@ -30,12 +40,11 @@ body{
 }
 
 .card{
-  background:rgba(15,23,42,.75);
-  margin:15px;
+  background:#0f172a;
+  margin:12px;
   padding:15px;
-  border-radius:18px;
-  box-shadow:0 0 25px rgba(0,0,0,0.4);
-  border:1px solid #1f2937;
+  border-radius:12px;
+  border:1px solid #1e293b;
 }
 
 .badge-online{color:#10b981;font-weight:bold;}
@@ -47,42 +56,44 @@ table{
 }
 
 th,td{
+  padding:8px;
   border-bottom:1px solid #1e293b;
-  padding:10px;
-  font-size:14px;
 }
 
 .time{
-  font-family: monospace;
   color:#a5b4fc;
-}
-.logitem{
-  margin:4px 0;
+  font-family:monospace;
 }
 </style>
 
 </head>
 <body>
 
-<div class="header">CyberMonitor — Live Security Dashboard</div>
+<div class="topbar">
+  <div>CyberMonitor Dashboard</div>
+
+  <div>
+    <button onclick="downloadAgent()">Download Monitor Agent</button>
+    <button onclick="logout()">Logout</button>
+  </div>
+</div>
 
 <div class="grid">
 
 <div class="card">
-  <h3>User / Device Status</h3>
-
+  <h3>User Profile</h3>
   <p><b>Email:</b> <span id="email"></span></p>
   <p><b>Machine:</b> <span id="machine"></span></p>
   <p><b>Status:</b> <span id="status"></span></p>
-  <p><b>Last Seen:</b> <span id="last_seen" class="time"></span></p>
+  <p><b>Last Seen:</b> <span class="time" id="last_seen"></span></p>
 </div>
 
 <div class="card">
   <h3>Connected External USB Devices</h3>
   <table id="usb_table">
     <tr>
-      <th>Device Name</th>
-      <th>Token</th>
+      <th>Device</th>
+      <th>Connected Time (IST)</th>
     </tr>
   </table>
 </div>
@@ -90,11 +101,12 @@ th,td{
 </div>
 
 <div class="card">
-  <h3>Security Logs</h3>
+  <h3>Recent Actions</h3>
   <div id="logs"></div>
 </div>
 
 <script>
+
 const firebaseConfig = {
   apiKey:"AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
   authDomain:"cybermonitor-1ab3c.firebaseapp.com",
@@ -102,96 +114,116 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
+const auth=firebase.auth();
+const db=firebase.firestore();
 
-const auth = firebase.auth();
-const db = firebase.firestore();
-
-auth.onAuthStateChanged(user=>{
-  if(!user){window.location="login.html";return;}
-  start(user.uid,user.email);
-});
-
-function toIST(utcString){
-  let d = new Date(utcString);
-  let IST = new Date(d.getTime() + 5.5*60*60*1000);
-
-  let dd = String(IST.getDate()).padStart(2,'0');
-  let mm = String(IST.getMonth()+1).padStart(2,'0');
-  let yy = IST.getFullYear();
-
-  let hh = String(IST.getHours()).padStart(2,'0');
-  let mi = String(IST.getMinutes()).padStart(2,'0');
-  let ss = String(IST.getSeconds()).padStart(2,'0');
-
-  return `${dd}.${mm}.${yy} ${hh}:${mi}:${ss}`;
+function logout(){
+  auth.signOut().then(()=>location.href="login.html");
 }
 
-function start(uid,email){
+function downloadAgent(){
+  window.location.href="monitor.py";
+}
+
+function toIST(utc){
+  let d=new Date(utc);
+  let ist=new Date(d.getTime()+5.5*60*60*1000);
+
+  return ist.toLocaleString("en-IN",{
+    year:"numeric",
+    month:"2-digit",
+    day:"2-digit",
+    hour:"2-digit",
+    minute:"2-digit",
+    second:"2-digit",
+    hour12:false
+  }).replace(",","");
+}
+
+auth.onAuthStateChanged(user=>{
+  if(!user){
+    location.href="login.html";
+    return;
+  }
+
+  startDashboard(user.uid,user.email);
+});
+
+function startDashboard(uid,email){
 
   document.getElementById("email").innerText=email;
 
   db.doc(`users/${uid}`).onSnapshot(doc=>{
-    if(!doc.exists) return;
 
-    let d = doc.data();
+    if(!doc.exists)return;
 
-    document.getElementById("machine").innerText = d.machine || "Unknown";
+    let d=doc.data();
 
-    // ONLINE logic based on last_seen
-    let last = new Date(d.last_seen);
-    let now = new Date();
-    let diff = (now - last)/1000;
+    document.getElementById("machine").innerText=d.machine||"Unknown";
 
-    if(diff < 10)
+    document.getElementById("last_seen").innerText=
+      d.last_seen?toIST(d.last_seen):"N/A";
+
+    let last=new Date(d.last_seen);
+    let now=new Date();
+    let diff=(now-last)/1000;
+
+    if(diff<12)
       document.getElementById("status").innerHTML="<span class='badge-online'>ONLINE</span>";
     else
       document.getElementById("status").innerHTML="<span class='badge-offline'>OFFLINE</span>";
-
-    document.getElementById("last_seen").innerText = toIST(d.last_seen);
   });
 
   db.doc(`users/${uid}/status/usb_status`).onSnapshot(doc=>{
-    const table = document.getElementById("usb_table");
-    table.innerHTML="<tr><th>Device Name</th><th>Token</th></tr>";
 
-    if(!doc.exists) return;
+    const t=document.getElementById("usb_table");
+    t.innerHTML="<tr><th>Device</th><th>Connected Time (IST)</th></tr>";
 
-    let arr = doc.data().usb_devices?.values || [];
+    if(!doc.exists)return;
+
+    let arr=doc.data().usb_devices?.values||[];
+
+    if(arr.length===0){
+      let tr=document.createElement("tr");
+      tr.innerHTML="<td colspan=2>No external devices</td>";
+      t.appendChild(tr);
+    }
 
     arr.forEach(v=>{
       let f=v.mapValue.fields;
-      let row=document.createElement("tr");
-      row.innerHTML=`
+
+      let tr=document.createElement("tr");
+
+      tr.innerHTML=`
         <td>${f.device_name.stringValue}</td>
-        <td>${f.token.stringValue}</td>
+        <td>${toIST(new Date().toISOString())}</td>
       `;
-      table.appendChild(row);
+
+      t.appendChild(tr);
     });
 
   });
 
   db.collection(`users/${uid}/logs`)
-   .orderBy("timestamp","desc")
-   .limit(25)
-   .onSnapshot(snap=>{
+    .orderBy("timestamp","desc")
+    .limit(20)
+    .onSnapshot(s=>{
       const box=document.getElementById("logs");
       box.innerHTML="";
 
-      snap.forEach(doc=>{
+      s.forEach(doc=>{
         let d=doc.data();
+
         let div=document.createElement("div");
-        div.className="logitem";
 
-        let color="#9ca3af";
-        if(d.severity==="HIGH")color="#f97316";
-        if(d.severity==="CRITICAL")color="#ef4444";
+        div.innerHTML=`<span class="time">${toIST(d.timestamp)}</span> — ${d.message}`;
 
-        div.style.color=color;
-        div.innerText=`${toIST(d.timestamp)} - ${d.message}`;
         box.appendChild(div);
       });
-   });
+
+    });
 }
+
 </script>
 
 </body>
