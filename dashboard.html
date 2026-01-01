@@ -5,23 +5,32 @@
 <title>CyberMonitor Dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
+<!-- Tailwind -->
 <script src="https://cdn.tailwindcss.com"></script>
+
+<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <style>
 body{
-  background:#020617;
+  background: radial-gradient(circle at top, #020617, #01030a);
   color:#e5e7eb;
   font-family: Inter, system-ui, sans-serif;
 }
 .card{
-  background:#020c1b;
-  border:1px solid #0f172a;
+  background: rgba(2,12,27,.85);
+  backdrop-filter: blur(12px);
+  border:1px solid rgba(255,255,255,.05);
   border-radius:14px;
 }
 .tab-btn.active{
   background:#2563eb;
+}
+.badge{
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:11px;
 }
 </style>
 </head>
@@ -32,54 +41,92 @@ body{
 
 <!-- HEADER -->
 <div class="flex justify-between items-center mb-6">
-  <h1 class="text-3xl font-bold">🛡 CyberMonitor</h1>
-  <button onclick="logout()" class="bg-red-600 px-4 py-2 rounded">Logout</button>
+  <div>
+    <h1 class="text-3xl font-bold">🛡 CyberMonitor</h1>
+    <p class="text-gray-400 text-sm">USB Endpoint Monitoring Dashboard</p>
+  </div>
+  <button onclick="logout()" class="bg-red-600 px-4 py-2 rounded-lg">
+    Logout
+  </button>
 </div>
 
 <!-- TABS -->
-<div class="flex gap-2 mb-6">
-  <button class="tab-btn active px-4 py-2 rounded" onclick="openTab('monitor')">Monitoring</button>
-  <button class="tab-btn px-4 py-2 rounded" onclick="openTab('logs')">Logs</button>
-  <button class="tab-btn px-4 py-2 rounded" onclick="openTab('profile')">Profile</button>
+<div class="flex flex-wrap gap-2 mb-6">
+  <button class="tab-btn active px-4 py-2 rounded-lg" onclick="openTab('monitor')">Monitoring</button>
+  <button class="tab-btn px-4 py-2 rounded-lg" onclick="openTab('logs')">Logs</button>
+  <button class="tab-btn px-4 py-2 rounded-lg" onclick="openTab('profile')">Profile</button>
+  <button class="tab-btn px-4 py-2 rounded-lg" onclick="openTab('whitelist')">Whitelist</button>
 </div>
 
-<!-- MONITOR -->
+<!-- MONITOR TAB -->
 <div id="monitor" class="tab card p-5">
-  <h2 class="text-xl mb-4">Connected USB Devices</h2>
+  <h2 class="text-xl font-semibold mb-4">Connected USB Devices</h2>
   <table class="w-full text-sm">
     <thead class="border-b border-gray-700 text-cyan-300">
       <tr>
         <th class="text-left py-2">Device</th>
         <th class="text-left py-2">Risk</th>
-        <th class="text-left py-2">Trust</th>
+        <th class="text-right py-2">Action</th>
       </tr>
     </thead>
     <tbody id="usbTable"></tbody>
   </table>
 </div>
 
-<!-- LOGS -->
+<!-- LOGS TAB -->
 <div id="logs" class="tab card p-5 hidden">
   <div class="flex justify-between mb-4">
-    <h2 class="text-xl">USB Session Logs</h2>
+    <h2 class="text-xl font-semibold">USB Session Logs</h2>
     <div class="flex gap-2">
-      <button onclick="printLogs()" class="bg-indigo-600 px-3 py-1 rounded">Print</button>
       <button onclick="exportCSV()" class="bg-emerald-600 px-3 py-1 rounded">CSV</button>
+      <button onclick="printLogs()" class="bg-indigo-600 px-3 py-1 rounded">Print</button>
     </div>
   </div>
   <div id="logBox" class="max-h-96 overflow-y-auto text-sm"></div>
 </div>
 
-<!-- PROFILE -->
-<div id="profile" class="tab card p-5 hidden">
-  <h2 class="text-xl mb-4">Profile</h2>
-  <div id="profileInfo" class="text-sm"></div>
+<!-- PROFILE TAB -->
+<div id="profile" class="tab card p-6 hidden">
+  <h2 class="text-2xl font-semibold mb-4">User Profile</h2>
+  <div class="grid md:grid-cols-2 gap-4 text-sm">
+    <div class="bg-black/30 p-4 rounded">
+      <p class="text-gray-400 text-xs">Email</p>
+      <p id="pEmail" class="font-medium"></p>
+    </div>
+    <div class="bg-black/30 p-4 rounded">
+      <p class="text-gray-400 text-xs">Machine Name</p>
+      <p id="pMachine" class="font-medium"></p>
+    </div>
+    <div class="bg-black/30 p-4 rounded">
+      <p class="text-gray-400 text-xs">Status</p>
+      <p id="pStatus" class="font-medium"></p>
+    </div>
+    <div class="bg-black/30 p-4 rounded">
+      <p class="text-gray-400 text-xs">Last Seen</p>
+      <p id="pLastSeen" class="font-medium"></p>
+    </div>
+  </div>
+</div>
+
+<!-- WHITELIST TAB -->
+<div id="whitelist" class="tab card p-5 hidden">
+  <h2 class="text-xl font-semibold mb-4">Trusted USB Devices</h2>
+  <table class="w-full text-sm">
+    <thead class="border-b border-gray-700 text-cyan-300">
+      <tr>
+        <th class="text-left py-2">Device Name</th>
+        <th class="text-left py-2">Trusted On</th>
+        <th class="text-right py-2">Action</th>
+      </tr>
+    </thead>
+    <tbody id="whitelistTable"></tbody>
+  </table>
 </div>
 
 </div>
 
 <script>
-/* ---------------- FIREBASE ---------------- */
+/* ---------------- FIREBASE INIT ---------------- */
 firebase.initializeApp({
   apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
   authDomain: "cybermonitor-1ab3c.firebaseapp.com",
@@ -104,11 +151,15 @@ function logout(){
   location.href="login.html";
 }
 
-/* ---------------- TRUST SYSTEM ---------------- */
+/* ---------------- TRUST MANAGEMENT ---------------- */
 function trustDevice(name){
   db.collection("users").doc(uid)
     .collection("trusted").doc(name)
-    .set({trusted:true});
+    .set({ trusted:true, added:new Date().toISOString() });
+}
+function removeTrusted(name){
+  db.collection("users").doc(uid)
+    .collection("trusted").doc(name).delete();
 }
 
 /* ---------------- USB MONITOR ---------------- */
@@ -121,8 +172,10 @@ db.collection("users").doc(uid).collection("usb_status")
     html+=`
       <tr class="border-b border-gray-800">
         <td class="py-2">${d.name}</td>
-        <td class="py-2">${d.risk}</td>
         <td class="py-2">
+          <span class="badge bg-yellow-600">${d.risk}</span>
+        </td>
+        <td class="py-2 text-right">
           <button onclick="trustDevice('${d.name}')"
             class="bg-green-600 px-2 py-1 rounded text-xs">
             Trust
@@ -130,10 +183,33 @@ db.collection("users").doc(uid).collection("usb_status")
         </td>
       </tr>`;
   });
-  document.getElementById("usbTable").innerHTML=html;
+  usbTable.innerHTML =
+    html || "<tr><td colspan='3' class='py-3 text-gray-400'>No devices</td></tr>";
 });
 
-/* ---------------- SESSION LOGS ---------------- */
+/* ---------------- WHITELIST VIEW ---------------- */
+db.collection("users").doc(uid).collection("trusted")
+.onSnapshot(snap=>{
+  let html="";
+  snap.forEach(doc=>{
+    const d=doc.data();
+    html+=`
+      <tr class="border-b border-gray-800">
+        <td class="py-2">${doc.id}</td>
+        <td class="py-2">${new Date(d.added).toLocaleString()}</td>
+        <td class="py-2 text-right">
+          <button onclick="removeTrusted('${doc.id}')"
+            class="bg-red-600 px-2 py-1 rounded text-xs">
+            Remove
+          </button>
+        </td>
+      </tr>`;
+  });
+  whitelistTable.innerHTML =
+    html || "<tr><td colspan='3' class='py-3 text-gray-400'>No trusted devices</td></tr>";
+});
+
+/* ---------------- LOGS (SESSION VIEW) ---------------- */
 let logs=[];
 db.collection("users").doc(uid).collection("logs")
 .orderBy("timestamp","asc")
@@ -152,13 +228,13 @@ function renderLogs(){
       sessions[l.device]={start:new Date(l.timestamp)};
     }
     if(l.event==="USB Removed" && sessions[l.device]){
-      const end=new Date(l.timestamp);
       const start=sessions[l.device].start;
+      const end=new Date(l.timestamp);
       const mins=Math.round((end-start)/60000);
       html+=`
-        <div class="mb-2">
+        <div class="mb-3">
           <b>${l.device}</b><br>
-          Duration: ${mins} minutes<br>
+          <span class="text-sm">Duration: ${mins} minutes</span><br>
           <span class="text-xs text-gray-400">
             ${start.toLocaleString()} → ${end.toLocaleString()}
           </span>
@@ -167,14 +243,14 @@ function renderLogs(){
       delete sessions[l.device];
     }
   });
-  document.getElementById("logBox").innerHTML=
-    html||"<p class='text-gray-400'>No completed sessions</p>";
+  logBox.innerHTML =
+    html || "<p class='text-gray-400'>No completed sessions</p>";
 }
 
 /* ---------------- EXPORT / PRINT ---------------- */
 function exportCSV(){
   let csv="Device,Start,End,Duration(min)\n";
-  document.querySelectorAll("#logBox b").forEach((b,i)=>{
+  document.querySelectorAll("#logBox b").forEach(b=>{
     csv+=`${b.innerText}\n`;
   });
   const blob=new Blob([csv],{type:"text/csv"});
@@ -192,12 +268,10 @@ function printLogs(){
 /* ---------------- PROFILE ---------------- */
 db.collection("users").doc(uid).onSnapshot(doc=>{
   const d=doc.data();
-  profileInfo.innerHTML=`
-    <b>Email:</b> ${d.email}<br>
-    <b>Machine:</b> ${d.machine}<br>
-    <b>Status:</b> ${d.is_online?"Online":"Offline"}<br>
-    <b>Last Seen:</b> ${new Date(d.last_seen).toLocaleString()}
-  `;
+  pEmail.innerText=d.email;
+  pMachine.innerText=d.machine;
+  pStatus.innerText=d.is_online?"🟢 Online":"🔴 Offline";
+  pLastSeen.innerText=new Date(d.last_seen).toLocaleString();
 });
 </script>
 
