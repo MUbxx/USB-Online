@@ -5,6 +5,10 @@
 <title>CyberMonitor Dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
+<!-- Tailwind -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
@@ -14,111 +18,100 @@ body{
   color:#e5e7eb;
   font-family:Segoe UI, Arial;
 }
-.container{
-  max-width:1100px;
-  margin:auto;
-  padding:20px;
-}
 .card{
   background:#020c1b;
-  padding:15px;
-  border-radius:10px;
+  padding:18px;
+  border-radius:14px;
   margin-bottom:18px;
-  box-shadow:0 0 18px rgba(0,255,255,0.15);
+  box-shadow:0 0 18px rgba(0,255,255,0.08);
 }
 .logs{
-  max-height:250px;
+  max-height:260px;
   overflow-y:auto;
   background:#020617;
   padding:10px;
   border-radius:8px;
 }
-.top{
-  display:flex;
-  justify-content:space-between;
-}
-.btn{padding:8px 14px;border-radius:7px;border:none;background:#0ea5e9;color:white}
-.btn.red{background:#ef4444}
 </style>
 </head>
 
-<body>
+<body class="min-h-screen">
 
-<div class="container">
+<div class="max-w-5xl mx-auto p-6">
 
-<div class="top">
-  <h1>🖥 CyberMonitor Dashboard</h1>
-  <div>
-    <button class="btn" onclick="downloadMonitor()">⬇ Download Monitor</button>
-    <button class="btn red" onclick="logout()">🚪 Logout</button>
-  </div>
-</div>
+<h1 class="text-3xl font-bold mb-4">🖥 CyberMonitor Dashboard</h1>
 
-<div class="card" id="status">Loading…</div>
+<p class="text-gray-400 mb-4">
+Logged in as: <span id="userEmail" class="text-cyan-400"></span>
+</p>
+
+<div class="card" id="status">Loading status…</div>
 
 <div class="card">
-  <h2>Connected USB Devices</h2>
-  <table width="100%">
+  <h2 class="text-xl mb-2 font-semibold">Connected USB Devices</h2>
+  <table class="w-full text-sm">
     <thead>
-      <tr><th>Device</th><th>Risk</th><th>Time</th></tr>
+      <tr class="text-cyan-300">
+        <th class="text-left p-1">Device</th>
+        <th class="text-left p-1">Risk</th>
+        <th class="text-left p-1">Timestamp</th>
+      </tr>
     </thead>
     <tbody id="usbTable"></tbody>
   </table>
 </div>
 
 <div class="card">
-  <h2>USB Logs</h2>
-  <div id="logBox" class="logs">Loading logs…</div>
+  <h2 class="text-xl mb-2 font-semibold">USB Event Logs</h2>
+  <div id="logBox" class="logs text-sm">Loading logs…</div>
 </div>
+
+<button onclick="logout()"
+ class="mt-3 bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg">
+Logout
+</button>
 
 </div>
 
 <script>
-/* FIREBASE CONFIG */
+/* ---------------- FIREBASE CONFIG ---------------- */
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID"
+  apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
+  authDomain: "cybermonitor-1ab3c.firebaseapp.com",
+  projectId: "cybermonitor-1ab3c",
 };
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-/* AUTO UID DETECTION */
-async function getUID(){
+/* ---------------- GET EMAIL FROM LOGIN ---------------- */
+const email = localStorage.getItem("login_email");
 
-  // 1) try file created by monitor.py
-  try{
-    const r = await fetch("uid.json");
-    const j = await r.json();
-    localStorage.setItem("usb_uid", j.uid);
-    return j.uid;
-  }catch(e){}
-
-  // 2) try browser saved UID
-  const saved = localStorage.getItem("usb_uid");
-  if(saved) return saved;
-
-  document.body.innerHTML="<h2 style='color:red'>UID not found. Run monitor.py first.</h2>";
+if(!email){
+  document.body.innerHTML = "<h2 style='color:red;text-align:center;margin-top:40px'>Not Authorized — Please Login First</h2>";
+  throw new Error("No login email found");
 }
 
-let uidPromise = getUID();
+document.getElementById("userEmail").innerText = email;
 
-uidPromise.then(uid=>{
+/* convert email → UID (same as Python script) */
+const uid = email.replace(/@/g,"_").replace(/\./g,"_");
 
-/* DOWNLOAD BUTTON */
-window.downloadMonitor = ()=> window.location.href="monitor.py";
+/* ---------------- LOGOUT ---------------- */
+function logout(){
+  localStorage.removeItem("login_email");
+  window.location.href = "login.html";
+}
 
-/* LOGOUT */
-window.logout = ()=>{
-  localStorage.removeItem("usb_uid");
-  alert("Logged out");
-  location.reload();
-};
-
-/* STATUS */
+/* ---------------- STATUS CARD ---------------- */
 db.collection("users").doc(uid).onSnapshot(doc=>{
+  if(!doc.exists){
+    document.getElementById("status").innerHTML = "<span style='color:red'>User not found in database.</span>";
+    return;
+  }
+
   const d = doc.data();
+
   document.getElementById("status").innerHTML = `
     <b>Email:</b> ${d.email}<br>
     <b>Machine:</b> ${d.machine}<br>
@@ -127,33 +120,36 @@ db.collection("users").doc(uid).onSnapshot(doc=>{
   `;
 });
 
-/* USB DEVICES */
+/* ---------------- USB DEVICES ---------------- */
 db.collection("users").doc(uid).collection("usb_status")
-.orderBy("timestamp","desc").onSnapshot(snap=>{
+.orderBy("timestamp","desc").onSnapshot(snapshot=>{
   let html="";
-  snap.forEach(doc=>{
+  snapshot.forEach(doc=>{
     const d = doc.data();
-    html += `<tr>
-      <td>${d.name}</td>
-      <td>${d.risk}</td>
-      <td>${new Date(d.timestamp).toLocaleString()}</td>
-    </tr>`;
+    html += `
+      <tr>
+        <td class="p-1">${d.name}</td>
+        <td class="p-1">${d.risk}</td>
+        <td class="p-1">${new Date(d.timestamp).toLocaleString()}</td>
+      </tr>`;
   });
-  document.getElementById("usbTable").innerHTML = html || "<tr><td colspan=3>No devices</td></tr>";
+  document.getElementById("usbTable").innerHTML = html || `<tr><td colspan="3">No USB records</td></tr>`;
 });
 
-/* LOGS */
+/* ---------------- LOGS ---------------- */
 db.collection("users").doc(uid).collection("logs")
-.orderBy("timestamp","desc").limit(40).onSnapshot(snap=>{
+.orderBy("timestamp","desc").limit(50).onSnapshot(snapshot=>{
   let html="";
-  snap.forEach(doc=>{
-    const d=doc.data();
-    html += `<div><b>${d.event}</b> — ${d.device}<br>
-      <small>${new Date(d.timestamp).toLocaleString()}</small><hr></div>`;
+  snapshot.forEach(doc=>{
+    const d = doc.data();
+    html += `
+      <div class="mb-1">
+        <b>${d.event}</b> — ${d.device}<br>
+        <span class="text-gray-400 text-xs">${new Date(d.timestamp).toLocaleString()}</span>
+        <hr class="border-gray-700 mt-1">
+      </div>`;
   });
-  document.getElementById("logBox").innerHTML=html;
-});
-
+  document.getElementById("logBox").innerHTML = html || "No logs yet.";
 });
 </script>
 
