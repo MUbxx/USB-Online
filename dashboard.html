@@ -1,41 +1,80 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>USB Monitor Dashboard</title>
+<title>CyberMonitor Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <style>
-body {
-    background:#0b0f14;
-    color:#e5e7eb;
-    font-family:Arial;
-    padding:20px;
+body{
+  background:#020617;
+  color:#e5e7eb;
+  font-family:Segoe UI, Arial;
 }
-.card {
-    background:#111827;
-    padding:15px;
-    border-radius:8px;
-    margin-bottom:15px;
+.container{
+  max-width:1100px;
+  margin:auto;
+  padding:20px;
 }
-.low {color:#22c55e;}
-.medium {color:#eab308;}
-.high {color:#ef4444;}
+.card{
+  background:#020c1b;
+  padding:15px;
+  border-radius:10px;
+  margin-bottom:18px;
+  box-shadow:0 0 18px rgba(0,255,255,0.15);
+}
+.logs{
+  max-height:250px;
+  overflow-y:auto;
+  background:#020617;
+  padding:10px;
+  border-radius:8px;
+}
+.top{
+  display:flex;
+  justify-content:space-between;
+}
+.btn{padding:8px 14px;border-radius:7px;border:none;background:#0ea5e9;color:white}
+.btn.red{background:#ef4444}
 </style>
 </head>
 
 <body>
 
-<h2>USB Monitoring Dashboard</h2>
+<div class="container">
 
-<div class="card" id="status">Loading status...</div>
-<div class="card" id="usb">Loading USB devices...</div>
-<div class="card" id="logs">Loading logs...</div>
+<div class="top">
+  <h1>🖥 CyberMonitor Dashboard</h1>
+  <div>
+    <button class="btn" onclick="downloadMonitor()">⬇ Download Monitor</button>
+    <button class="btn red" onclick="logout()">🚪 Logout</button>
+  </div>
+</div>
+
+<div class="card" id="status">Loading…</div>
+
+<div class="card">
+  <h2>Connected USB Devices</h2>
+  <table width="100%">
+    <thead>
+      <tr><th>Device</th><th>Risk</th><th>Time</th></tr>
+    </thead>
+    <tbody id="usbTable"></tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>USB Logs</h2>
+  <div id="logBox" class="logs">Loading logs…</div>
+</div>
+
+</div>
 
 <script>
-/* ================= CONFIG ================= */
-
+/* FIREBASE CONFIG */
 const firebaseConfig = {
   apiKey: "YOUR_API_KEY",
   authDomain: "YOUR_PROJECT.firebaseapp.com",
@@ -45,64 +84,76 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-/* ================= UID ================= */
+/* AUTO UID DETECTION */
+async function getUID(){
 
-const params = new URLSearchParams(window.location.search);
-const uid = params.get("uid");
+  // 1) try file created by monitor.py
+  try{
+    const r = await fetch("uid.json");
+    const j = await r.json();
+    localStorage.setItem("usb_uid", j.uid);
+    return j.uid;
+  }catch(e){}
 
-if (!uid) {
-  document.body.innerHTML = "<h2 style='color:red'>UID missing in URL</h2>";
-  throw new Error("UID missing");
+  // 2) try browser saved UID
+  const saved = localStorage.getItem("usb_uid");
+  if(saved) return saved;
+
+  document.body.innerHTML="<h2 style='color:red'>UID not found. Run monitor.py first.</h2>";
 }
 
-/* ================= STATUS ================= */
+let uidPromise = getUID();
 
-db.collection("users").doc(uid).onSnapshot(doc => {
-    if (!doc.exists) return;
+uidPromise.then(uid=>{
+
+/* DOWNLOAD BUTTON */
+window.downloadMonitor = ()=> window.location.href="monitor.py";
+
+/* LOGOUT */
+window.logout = ()=>{
+  localStorage.removeItem("usb_uid");
+  alert("Logged out");
+  location.reload();
+};
+
+/* STATUS */
+db.collection("users").doc(uid).onSnapshot(doc=>{
+  const d = doc.data();
+  document.getElementById("status").innerHTML = `
+    <b>Email:</b> ${d.email}<br>
+    <b>Machine:</b> ${d.machine}<br>
+    <b>Status:</b> ${d.is_online ? "🟢 ONLINE" : "🔴 OFFLINE"}<br>
+    <b>Last Seen:</b> ${new Date(d.last_seen).toLocaleString()}
+  `;
+});
+
+/* USB DEVICES */
+db.collection("users").doc(uid).collection("usb_status")
+.orderBy("timestamp","desc").onSnapshot(snap=>{
+  let html="";
+  snap.forEach(doc=>{
     const d = doc.data();
-    document.getElementById("status").innerHTML = `
-        <b>Email:</b> ${d.email}<br>
-        <b>Machine:</b> ${d.machine}<br>
-        <b>Status:</b> ${d.is_online ? "ONLINE 🟢" : "OFFLINE 🔴"}<br>
-        <b>Last Seen:</b> ${new Date(d.last_seen).toLocaleString()}
-    `;
+    html += `<tr>
+      <td>${d.name}</td>
+      <td>${d.risk}</td>
+      <td>${new Date(d.timestamp).toLocaleString()}</td>
+    </tr>`;
+  });
+  document.getElementById("usbTable").innerHTML = html || "<tr><td colspan=3>No devices</td></tr>";
 });
 
-/* ================= USB ================= */
-
-db.collection("users").doc(uid)
-.collection("usb_status")
-.onSnapshot(snapshot => {
-    let html = "<b>Connected USB Devices</b><br><br>";
-    snapshot.forEach(doc => {
-        const d = doc.data();
-        html += `
-        <div>
-          ${d.name}<br>
-          <span class="${d.risk.toLowerCase()}">${d.risk}</span>
-          <small> (${new Date(d.timestamp).toLocaleString()})</small>
-        </div><hr>`;
-    });
-    document.getElementById("usb").innerHTML = html;
+/* LOGS */
+db.collection("users").doc(uid).collection("logs")
+.orderBy("timestamp","desc").limit(40).onSnapshot(snap=>{
+  let html="";
+  snap.forEach(doc=>{
+    const d=doc.data();
+    html += `<div><b>${d.event}</b> — ${d.device}<br>
+      <small>${new Date(d.timestamp).toLocaleString()}</small><hr></div>`;
+  });
+  document.getElementById("logBox").innerHTML=html;
 });
 
-/* ================= LOGS ================= */
-
-db.collection("users").doc(uid)
-.collection("logs")
-.orderBy("timestamp","desc")
-.limit(20)
-.onSnapshot(snapshot => {
-    let html = "<b>USB Activity Logs</b><br><br>";
-    snapshot.forEach(doc => {
-        const d = doc.data();
-        html += `
-        <div>
-          ${d.event} — ${d.device}<br>
-          <small>${new Date(d.timestamp).toLocaleString()}</small>
-        </div><hr>`;
-    });
-    document.getElementById("logs").innerHTML = html;
 });
 </script>
 
