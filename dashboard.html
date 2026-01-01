@@ -3,93 +3,42 @@
 <head>
 <meta charset="UTF-8">
 <title>CyberMonitor Dashboard</title>
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, doc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
-  authDomain: "cybermonitor-1ab3c.firebaseapp.com",
-  projectId: "cybermonitor-1ab3c"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-// 🔒 FIXED UID (matches agent)
-const UID = "MXXq4tHL35hzKi9PJytPCXWDSzn1";
-
-/* ================= STATUS ================= */
-onSnapshot(doc(db, "users", UID), snap => {
-  if (!snap.exists()) return;
-  const f = snap.data().fields;
-
-  document.getElementById("email").innerText =
-    f.email?.stringValue || "-";
-
-  document.getElementById("machine").innerText =
-    f.machine?.stringValue || "-";
-
-  document.getElementById("status").innerText =
-    f.is_online?.booleanValue ? "ONLINE 🟢" : "OFFLINE 🔴";
-
-  document.getElementById("lastSeen").innerText =
-    f.last_seen?.timestampValue
-      ? new Date(f.last_seen.timestampValue).toLocaleString()
-      : "-";
-});
-
-/* ================= USB ================= */
-onSnapshot(doc(db, "users", UID, "status", "usb_status"), snap => {
-  const tbody = document.getElementById("usbBody");
-  tbody.innerHTML = "";
-  if (!snap.exists()) return;
-
-  const arr = snap.data().fields.usb_devices?.arrayValue?.values || [];
-  arr.forEach(d => {
-    const f = d.mapValue.fields;
-    tbody.innerHTML += `
-      <tr>
-        <td>${f.device_name.stringValue}</td>
-        <td>${f.token.stringValue}</td>
-      </tr>`;
-  });
-});
-
-/* ================= LOGS ================= */
-onSnapshot(collection(db, "users", UID, "logs"), snap => {
-  const box = document.getElementById("logs");
-  box.innerHTML = "";
-  snap.docs
-    .sort((a,b) =>
-      b.data().fields.timestamp.timestampValue.localeCompare(
-        a.data().fields.timestamp.timestampValue))
-    .forEach(d => {
-      const f = d.data().fields;
-      box.innerHTML += `<div>[${f.severity.stringValue}] ${f.message.stringValue}</div>`;
-    });
-});
-</script>
 
 <style>
-body { background:#0b1020; color:#fff; font-family:Arial; padding:20px }
-.card { background:#111933; padding:15px; margin-bottom:20px; border-radius:10px }
-table { width:100%; border-collapse:collapse }
-td,th { padding:8px; border-bottom:1px solid #333 }
+body {
+  background:#0b1020;
+  color:#fff;
+  font-family:Arial;
+  padding:20px;
+}
+.card {
+  background:#111933;
+  padding:15px;
+  margin-bottom:20px;
+  border-radius:10px;
+}
+table {
+  width:100%;
+  border-collapse:collapse;
+}
+td, th {
+  padding:8px;
+  border-bottom:1px solid #333;
+}
 </style>
 </head>
 
 <body>
 
 <h1>CyberMonitor Dashboard</h1>
-<p>UID fixed: <b>MXXq4tHL35hzKi9PJytPCXWDSzn1</b></p>
+<p>UID fixed: <b id="uid"></b></p>
 
 <div class="card">
   <h3>Status</h3>
-  Email: <span id="email"></span><br>
-  Machine: <span id="machine"></span><br>
-  Status: <span id="status"></span><br>
-  Last Seen: <span id="lastSeen"></span>
+  Email: <span id="email">-</span><br>
+  Machine: <span id="machine">-</span><br>
+  Status: <span id="status">-</span><br>
+  Last Seen: <span id="lastSeen">-</span>
 </div>
 
 <div class="card">
@@ -104,6 +53,86 @@ td,th { padding:8px; border-bottom:1px solid #333 }
   <h3>Logs</h3>
   <div id="logs"></div>
 </div>
+
+<script>
+const PROJECT_ID = "cybermonitor-1ab3c";
+const UID = "MXXq4tHL35hzKi9PJytPCXWDSzn1";
+document.getElementById("uid").innerText = UID;
+
+const BASE =
+  `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+
+async function loadStatus() {
+  const r = await fetch(`${BASE}/users/${UID}`);
+  if (!r.ok) return;
+  const d = await r.json();
+  const f = d.fields;
+
+  document.getElementById("email").innerText =
+    f.email?.stringValue || "-";
+
+  document.getElementById("machine").innerText =
+    f.machine?.stringValue || "-";
+
+  document.getElementById("status").innerText =
+    f.is_online?.booleanValue ? "ONLINE 🟢" : "OFFLINE 🔴";
+
+  document.getElementById("lastSeen").innerText =
+    f.last_seen?.timestampValue
+      ? new Date(f.last_seen.timestampValue).toLocaleString()
+      : "-";
+}
+
+async function loadUSB() {
+  const r = await fetch(`${BASE}/users/${UID}/status/usb_status`);
+  if (!r.ok) return;
+  const d = await r.json();
+
+  const tbody = document.getElementById("usbBody");
+  tbody.innerHTML = "";
+
+  const arr =
+    d.fields?.usb_devices?.arrayValue?.values || [];
+
+  arr.forEach(v => {
+    const f = v.mapValue.fields;
+    tbody.innerHTML += `
+      <tr>
+        <td>${f.device_name.stringValue}</td>
+        <td>${f.token.stringValue}</td>
+      </tr>`;
+  });
+}
+
+async function loadLogs() {
+  const r = await fetch(`${BASE}/users/${UID}/logs`);
+  if (!r.ok) return;
+  const d = await r.json();
+
+  const box = document.getElementById("logs");
+  box.innerHTML = "";
+
+  const docs = d.documents || [];
+  docs
+    .sort((a,b) =>
+      b.fields.timestamp.timestampValue.localeCompare(
+        a.fields.timestamp.timestampValue))
+    .forEach(l => {
+      box.innerHTML +=
+        `<div>[${l.fields.severity.stringValue}]
+         ${l.fields.message.stringValue}</div>`;
+    });
+}
+
+async function refresh() {
+  await loadStatus();
+  await loadUSB();
+  await loadLogs();
+}
+
+refresh();
+setInterval(refresh, 3000);
+</script>
 
 </body>
 </html>
