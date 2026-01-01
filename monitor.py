@@ -27,7 +27,7 @@ SMTP_PASSWORD = os.getenv("USB_MONITOR_APP_PASSWORD")
 
 if not SMTP_PASSWORD:
     print("[FATAL] SMTP password not found.")
-    print("Set environment variable: USB_MONITOR_APP_PASSWORD")
+    print("Run: set USB_MONITOR_APP_PASSWORD=YOUR_APP_PASSWORD")
     exit(1)
 
 def send_email_alert(to_email, subject, message):
@@ -42,7 +42,7 @@ def send_email_alert(to_email, subject, message):
             server.login(SMTP_EMAIL, SMTP_PASSWORD)
             server.send_message(msg)
 
-        print("[EMAIL] Alert sent to", to_email)
+        print("[EMAIL] Alert sent")
     except Exception as e:
         print("[EMAIL ERROR]", e)
 
@@ -61,10 +61,6 @@ user_ref.set({
     "is_online": True,
     "last_seen": now_ist()
 }, merge=True)
-
-# ================= TRUST CHECK =================
-def is_device_trusted(user_ref, device_name):
-    return user_ref.collection("trusted").document(device_name).get().exists
 
 # ================= DEVICE NAME FALLBACK =================
 VENDOR_MAP = {
@@ -102,11 +98,11 @@ def get_usb_devices():
         # Remove composite interfaces
         base_id = re.sub(r"&MI_\\d+", "", device_id)
 
-        # Ignore internal USB
+        # Ignore internal USB devices
         if any(v in base_id for v in INTERNAL_VIDS):
             continue
 
-        # Clean name
+        # Clean device name
         if not name or "unknown" in name.lower():
             vid_match = re.search(r"(VID_[0-9A-F]{4})", base_id)
             vid = vid_match.group(1) if vid_match else None
@@ -117,9 +113,9 @@ def get_usb_devices():
     return devices
 
 # ================= BASELINE =================
-print("[*] Creating USB baseline (no alerts on startup)...")
+print("[*] Creating USB baseline (existing devices ignored)...")
 previous_devices = get_usb_devices()
-print(f"[*] Baseline ready ({len(previous_devices)} devices ignored)\n")
+print(f"[*] Baseline ready ({len(previous_devices)} devices)\n")
 
 print("[+] USB monitoring started...\n")
 
@@ -153,12 +149,10 @@ try:
                     "timestamp": timestamp
                 })
 
-                # Email only if NOT trusted
-                if not is_device_trusted(user_ref, device_name):
-                    send_email_alert(
-                        email,
-                        "🚨 CyberMonitor Alert: USB Device Connected",
-                        f"""
+                send_email_alert(
+                    email,
+                    "🚨 CyberMonitor Alert: USB Device Connected",
+                    f"""
 Hello,
 
 A USB device has been detected on your system.
@@ -175,9 +169,7 @@ https://mubxx.github.io/USB-Online/login.html
 Regards,
 CyberMonitor Security System
 """
-                    )
-                else:
-                    print(f"[INFO] {device_name} is trusted. Email skipped.")
+                )
 
         # USB REMOVED
         for dev in previous_devices:
