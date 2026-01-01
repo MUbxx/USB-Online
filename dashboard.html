@@ -2,118 +2,108 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Cyber Monitor Dashboard</title>
+<title>USB Monitor Dashboard</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <style>
 body {
-  background:#0b0f1a;
-  color:#fff;
-  font-family: Arial;
+    background:#0b0f14;
+    color:#e5e7eb;
+    font-family:Arial;
+    padding:20px;
 }
-h2 { color:#00eaff; }
-
-table {
-  width:100%;
-  border-collapse: collapse;
+.card {
+    background:#111827;
+    padding:15px;
+    border-radius:8px;
+    margin-bottom:15px;
 }
-th, td {
-  padding:8px;
-  border-bottom:1px solid #222;
-}
-
-.low { color:#00ff9c; }
-.medium { color:#ffcc00; }
-.high { color:#ff4444; }
-.critical { color:#ff0000; font-weight:bold; }
-
-#logs {
-  max-height:300px;
-  overflow-y:auto;
-  background:#05070d;
-  padding:10px;
-}
-.log {
-  font-size:14px;
-  margin-bottom:6px;
-}
+.low {color:#22c55e;}
+.medium {color:#eab308;}
+.high {color:#ef4444;}
 </style>
 </head>
 
 <body>
 
-<h2>🖥 USB Security Monitor</h2>
+<h2>USB Monitoring Dashboard</h2>
 
-<h3>Connected USB Devices</h3>
-<table>
-<thead>
-<tr>
-<th>Name</th>
-<th>VID:PID</th>
-<th>Status</th>
-<th>Risk</th>
-<th>Time</th>
-</tr>
-</thead>
-<tbody id="usbTable"></tbody>
-</table>
-
-<h3>USB Event Timeline</h3>
-<div id="logs"></div>
+<div class="card" id="status">Loading status...</div>
+<div class="card" id="usb">Loading USB devices...</div>
+<div class="card" id="logs">Loading logs...</div>
 
 <script>
-const UID = "MXxq4tHL35hzKi9PJytPCXWDSzn1";
-const BASE = "https://cybermonitor-lab3c.web.app";
+/* ================= CONFIG ================= */
 
-let seenLogs = new Set();
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID"
+};
 
-function riskClass(risk) {
-  return risk.toLowerCase();
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+/* ================= UID ================= */
+
+const params = new URLSearchParams(window.location.search);
+const uid = params.get("uid");
+
+if (!uid) {
+  document.body.innerHTML = "<h2 style='color:red'>UID missing in URL</h2>";
+  throw new Error("UID missing");
 }
 
-async function loadUSB() {
-  const res = await fetch(`${BASE}/usb?uid=${UID}`);
-  const data = await res.json();
+/* ================= STATUS ================= */
 
-  const table = document.getElementById("usbTable");
-  table.innerHTML = "";
-
-  data.devices.forEach(d => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${d.name}</td>
-      <td>${d.vid_pid}</td>
-      <td>${d.status}</td>
-      <td class="${riskClass(d.risk)}">${d.risk}</td>
-      <td>${d.time}</td>
+db.collection("users").doc(uid).onSnapshot(doc => {
+    if (!doc.exists) return;
+    const d = doc.data();
+    document.getElementById("status").innerHTML = `
+        <b>Email:</b> ${d.email}<br>
+        <b>Machine:</b> ${d.machine}<br>
+        <b>Status:</b> ${d.is_online ? "ONLINE 🟢" : "OFFLINE 🔴"}<br>
+        <b>Last Seen:</b> ${new Date(d.last_seen).toLocaleString()}
     `;
-    table.appendChild(tr);
+});
 
-    if (d.risk === "HIGH" || d.risk === "CRITICAL") {
-      alert(`⚠️ ${d.risk} USB detected:\n${d.name}`);
-    }
-  });
-}
+/* ================= USB ================= */
 
-async function loadLogs() {
-  const res = await fetch(`${BASE}/logs?uid=${UID}`);
-  const data = await res.json();
-  const logBox = document.getElementById("logs");
+db.collection("users").doc(uid)
+.collection("usb_status")
+.onSnapshot(snapshot => {
+    let html = "<b>Connected USB Devices</b><br><br>";
+    snapshot.forEach(doc => {
+        const d = doc.data();
+        html += `
+        <div>
+          ${d.name}<br>
+          <span class="${d.risk.toLowerCase()}">${d.risk}</span>
+          <small> (${new Date(d.timestamp).toLocaleString()})</small>
+        </div><hr>`;
+    });
+    document.getElementById("usb").innerHTML = html;
+});
 
-  data.reverse().forEach(l => {
-    const key = l.message + l.time;
-    if (seenLogs.has(key)) return;
+/* ================= LOGS ================= */
 
-    seenLogs.add(key);
-    const div = document.createElement("div");
-    div.className = "log";
-    div.innerHTML = `[${l.time}] <b class="${riskClass(l.risk)}">${l.risk}</b> - ${l.message}`;
-    logBox.appendChild(div);
-    logBox.scrollTop = logBox.scrollHeight;
-  });
-}
-
-setInterval(loadUSB, 3000);
-setInterval(loadLogs, 3000);
+db.collection("users").doc(uid)
+.collection("logs")
+.orderBy("timestamp","desc")
+.limit(20)
+.onSnapshot(snapshot => {
+    let html = "<b>USB Activity Logs</b><br><br>";
+    snapshot.forEach(doc => {
+        const d = doc.data();
+        html += `
+        <div>
+          ${d.event} — ${d.device}<br>
+          <small>${new Date(d.timestamp).toLocaleString()}</small>
+        </div><hr>`;
+    });
+    document.getElementById("logs").innerHTML = html;
+});
 </script>
 
 </body>
