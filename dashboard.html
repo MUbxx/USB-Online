@@ -1,226 +1,160 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>USB Monitor Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>CyberMonitor Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <style>
-    body {
-      margin: 0;
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: #0b0f1a;
-      color: #e6e6e6;
-    }
-
-    h2 {
-      margin: 0 0 10px;
-      font-weight: 600;
-    }
-
-    .container {
-      padding: 20px;
-      max-width: 1200px;
-      margin: auto;
-    }
-
-    .card {
-      background: #131a2a;
-      border-radius: 10px;
-      padding: 15px;
-      margin-bottom: 20px;
-      box-shadow: 0 0 20px rgba(0,0,0,0.4);
-    }
-
-    .status {
-      display: flex;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .status span {
-      font-size: 14px;
-    }
-
-    .online {
-      color: #4caf50;
-      font-weight: bold;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-
-    th, td {
-      text-align: left;
-      padding: 10px;
-      border-bottom: 1px solid #25304a;
-      font-size: 14px;
-    }
-
-    th {
-      color: #9fb4ff;
-      font-weight: 600;
-    }
-
-    tr:hover {
-      background: #1b2440;
-    }
-
-    .mono {
-      font-family: Consolas, monospace;
-      font-size: 12px;
-      color: #cfd8ff;
-    }
-
-    .logs {
-      background: #0f1526;
-      height: 220px;
-      overflow-y: auto;
-      padding: 10px;
-      border-radius: 8px;
-      font-family: Consolas, monospace;
-      font-size: 13px;
-    }
-
-    .log {
-      margin-bottom: 6px;
-    }
-
-    .log.high {
-      color: #ff6b6b;
-    }
-
-    .log.info {
-      color: #9cdcfe;
-    }
-
-    footer {
-      text-align: center;
-      font-size: 12px;
-      color: #777;
-      margin-top: 30px;
-    }
-  </style>
+<style>
+body {
+  margin: 0;
+  font-family: Segoe UI, Arial, sans-serif;
+  background: #0b0f1a;
+  color: #e6e6e6;
+}
+.container {
+  max-width: 1200px;
+  margin: auto;
+  padding: 20px;
+}
+.card {
+  background: #131a2a;
+  border-radius: 10px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+h2 { margin: 0 0 10px; }
+.online { color: #4caf50; font-weight: bold; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th, td {
+  padding: 10px;
+  border-bottom: 1px solid #25304a;
+}
+th { color: #9fb4ff; }
+.mono { font-family: Consolas, monospace; font-size: 12px; }
+.logs {
+  background: #0f1526;
+  height: 220px;
+  overflow-y: auto;
+  padding: 10px;
+  border-radius: 8px;
+  font-family: Consolas, monospace;
+}
+.log { margin-bottom: 6px; }
+.log.high { color: #ff6b6b; }
+.log.info { color: #9cdcfe; }
+</style>
 </head>
-<body>
 
+<body>
 <div class="container">
 
-  <!-- STATUS CARD -->
-  <div class="card">
-    <h2>Status</h2>
-    <div class="status">
-      <span>Email: <b id="email">-</b></span>
-      <span>Machine: <b id="machine">-</b></span>
-      <span>Status: <span id="online" class="online">OFFLINE</span></span>
-      <span>Last Seen: <b id="lastSeen">-</b></span>
-    </div>
-  </div>
+<div class="card">
+  <h2>Status</h2>
+  Email: <b id="email">-</b><br>
+  Machine: <b id="machine">-</b><br>
+  Status: <span id="online">OFFLINE</span><br>
+  Last Seen: <b id="lastSeen">-</b>
+</div>
 
-  <!-- USB DEVICES -->
-  <div class="card">
-    <h2>External USB Devices</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Device</th>
-          <th>Token</th>
-          <th>Connected At</th>
-        </tr>
-      </thead>
-      <tbody id="usbTableBody">
-        <tr><td colspan="3">Loading...</td></tr>
-      </tbody>
-    </table>
-  </div>
+<div class="card">
+  <h2>External USB Devices</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Device</th>
+        <th>Token</th>
+        <th>Connected At</th>
+      </tr>
+    </thead>
+    <tbody id="usbTable"></tbody>
+  </table>
+</div>
 
-  <!-- LOGS -->
-  <div class="card">
-    <h2>Security Logs</h2>
-    <div id="logBox" class="logs"></div>
-  </div>
-
-  <footer>
-    USB Monitoring Dashboard • Cybersecurity Project
-  </footer>
+<div class="card">
+  <h2>Logs</h2>
+  <div id="logBox" class="logs"></div>
+</div>
 
 </div>
 
 <script>
 /* ================= CONFIG ================= */
-const USER_ID = "<PUT_USER_ID_HERE>";   // same UID used by monitor.py
+const API_KEY = "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k";
+const PROJECT_ID = "cybermonitor-1ab3c";
+const USER_ID = "MXXq4tHL35hzKi9PJytPCXWDSzn1";
 /* ========================================= */
+
+const BASE =
+  `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 
 let lastLogTime = null;
 
 /* -------- STATUS -------- */
 async function fetchStatus() {
-  const res = await fetch(`/api/status?uid=${USER_ID}`);
-  const d = await res.json();
+  const r = await fetch(`${BASE}/users/${USER_ID}?key=${API_KEY}`);
+  const d = (await r.json()).fields;
 
-  document.getElementById("email").innerText = d.email;
-  document.getElementById("machine").innerText = d.machine;
+  document.getElementById("email").innerText = d.email.stringValue;
+  document.getElementById("machine").innerText = d.machine.stringValue;
   document.getElementById("lastSeen").innerText =
-    new Date(d.last_seen).toLocaleString();
+    new Date(d.last_seen.timestampValue).toLocaleString();
 
-  const online = document.getElementById("online");
-  if (d.is_online) {
-    online.innerText = "ONLINE 🟢";
-    online.classList.add("online");
-  } else {
-    online.innerText = "OFFLINE 🔴";
-    online.classList.remove("online");
-  }
+  document.getElementById("online").innerText =
+    d.is_online.booleanValue ? "ONLINE 🟢" : "OFFLINE 🔴";
 }
 
-/* -------- USB DEVICES -------- */
-async function fetchDevices() {
-  const res = await fetch(`/api/usb?uid=${USER_ID}`);
-  const devices = await res.json();
+/* -------- USB -------- */
+async function fetchUSB() {
+  const r = await fetch(
+    `${BASE}/users/${USER_ID}/status/usb_status?key=${API_KEY}`
+  );
+  const d = (await r.json()).fields.usb_devices.arrayValue.values || [];
 
-  const tbody = document.getElementById("usbTableBody");
+  const tbody = document.getElementById("usbTable");
   tbody.innerHTML = "";
 
-  if (!devices.length) {
-    tbody.innerHTML = `<tr><td colspan="3">No external USB devices</td></tr>`;
+  if (!d.length) {
+    tbody.innerHTML = "<tr><td colspan='3'>No external USB devices</td></tr>";
     return;
   }
 
-  devices.forEach(d => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${d.device_name}</td>
-      <td class="mono">${d.token.slice(0, 30)}...</td>
-      <td>${new Date(d.connected_at).toLocaleString()}</td>
-    `;
-    tbody.appendChild(tr);
+  d.forEach(x => {
+    const f = x.mapValue.fields;
+    tbody.innerHTML += `
+      <tr>
+        <td>${f.device_name.stringValue}</td>
+        <td class="mono">${f.token.stringValue.slice(0,30)}...</td>
+        <td>${new Date(f.connected_at.timestampValue).toLocaleString()}</td>
+      </tr>`;
   });
 }
 
-/* -------- LOGS (NO FLICKER) -------- */
+/* -------- LOGS (APPEND ONLY) -------- */
 async function fetchLogs() {
-  let url = `/api/logs?uid=${USER_ID}`;
-  if (lastLogTime) {
-    url += `&after=${encodeURIComponent(lastLogTime)}`;
-  }
-
-  const res = await fetch(url);
-  const logs = await res.json();
+  const r = await fetch(
+    `${BASE}/users/${USER_ID}/logs?orderBy=timestamp&key=${API_KEY}`
+  );
+  const docs = (await r.json()).documents || [];
 
   const box = document.getElementById("logBox");
 
-  logs.forEach(log => {
+  docs.forEach(doc => {
+    const f = doc.fields;
+    const ts = f.timestamp.timestampValue;
+
+    if (lastLogTime && ts <= lastLogTime) return;
+
     const div = document.createElement("div");
-    div.className = `log ${log.severity.toLowerCase()}`;
+    div.className = `log ${f.severity.stringValue.toLowerCase()}`;
     div.textContent =
-      `[${new Date(log.timestamp).toLocaleTimeString()}] ${log.message}`;
+      `[${new Date(ts).toLocaleTimeString()}] ${f.message.stringValue}`;
     box.appendChild(div);
 
-    lastLogTime = log.timestamp;
+    lastLogTime = ts;
   });
 
   box.scrollTop = box.scrollHeight;
@@ -228,13 +162,12 @@ async function fetchLogs() {
 
 /* -------- POLLING -------- */
 fetchStatus();
-fetchDevices();
+fetchUSB();
 fetchLogs();
 
 setInterval(fetchStatus, 4000);
-setInterval(fetchDevices, 4000);
+setInterval(fetchUSB, 4000);
 setInterval(fetchLogs, 3000);
 </script>
-
 </body>
 </html>
