@@ -1,98 +1,133 @@
-import os
-import sys
-import time
 import socket
+import time
 import requests
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from getpass import getpass
 from usbmonitor import USBMonitor
 from usbmonitor.attributes import ID_MODEL, ID_SERIAL, ID_VENDOR
 
-# --- CONFIGURATION ---
-API_KEY = "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k"
+API_KEY = "YOUR_FIREBASE_WEB_API_KEY"
 PROJECT_ID = "cybermonitor-1ab3c"
 
-print("=== CyberMonitor Agent v4.0 (Event-Driven) ===")
-USER_EMAIL = input("Email: ")
-USER_PASSWORD = getpass("Password: ")
+print("=== CyberMonitor Agent v5.0 ===")
 
-hostname = socket.gethostname()
+EMAIL = input("Email: ")
+PASSWORD = getpass("Password: ")
+HOSTNAME = socket.gethostname()
+
 
 def login():
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={API_KEY}"
-    r = requests.post(url, json={"email": USER_EMAIL, "password": USER_PASSWORD, "returnSecureToken": True})
-    r.raise_for_status()
-    return r.json()["idToken"], r.json()["localId"]
 
-def update_cloud_state(token, uid, is_online):
-    """Updates the heartbeat and online status."""
+    r = requests.post(url, json={
+        "email": EMAIL,
+        "password": PASSWORD,
+        "returnSecureToken": True
+    })
+
+    r.raise_for_status()
+
+    j = r.json()
+    return j["idToken"], j["localId"]
+
+
+def update_user_state(token, uid, online=True):
     url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/users/{uid}"
-    payload = {"fields": {
-        "is_online": {"booleanValue": is_online},
-        "machine": {"stringValue": hostname},
-        "last_seen": {"stringValue": datetime.now(UTC).isoformat()}
-    }}
+
+    payload = {
+        "fields": {
+            "email": {"stringValue": EMAIL},
+            "machine": {"stringValue": HOSTNAME},
+            "is_online": {"booleanValue": online},
+            "last_seen": {"timestampValue": datetime.now(timezone.utc).isoformat()}
+        }
+    }
+
     requests.patch(url, json=payload, headers={"Authorization": f"Bearer {token}"})
 
-def log_event(token, uid, message, severity):
-    """Sends a security log to the cloud."""
+
+def push_log(token, uid, message, severity="INFO"):
     url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/users/{uid}/logs"
-    payload = {"fields": {
-        "message": {"stringValue": message},
-        "timestamp": {"timestampValue": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")},
-        "severity": {"stringValue": severity}
-    }}
+
+    payload = {
+        "fields": {
+            "message": {"stringValue": message},
+            "severity": {"stringValue": severity},
+            "timestamp": {"timestampValue": datetime.now(timezone.utc).isoformat()}
+        }
+    }
+
     requests.post(url, json=payload, headers={"Authorization": f"Bearer {token}"})
 
-def sync_usb_list(token, uid, monitor):
-    """Syncs the currently connected devices to the dashboard."""
+
+def sync_usb_devices(token, uid, monitor):
     devices = monitor.get_available_devices()
-    usb_values = []
+
+    usb_array = []
+
     for dev_id, info in devices.items():
-        usb_values.append({"mapValue": {"fields": {
-            "device_name": {"stringValue": info.get(ID_MODEL, "Unknown")},
-            "serial": {"stringValue": info.get(ID_SERIAL, "N/A")},
-            "vendor": {"stringValue": info.get(ID_VENDOR, "Generic")}
-        }}})
-    
+
+        model = info.get(ID_MODEL, "Unknown")
+        serial = info.get(ID_SERIAL, "N/A")
+        vendor = info.get(ID_VENDOR, "Generic")
+
+        token_id = f"{vendor}:{serial}"
+
+        usb_array.append({
+            "mapValue": {
+                "fields": {
+                    "device_name": {"stringValue": model},
+                    "token": {"stringValue": token_id},
+                    "pnp_id": {"stringValue": dev_id}
+                }
+            }
+        })
+
     url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents/users/{uid}/status/usb_status"
-    requests.patch(url, json={"fields": {"usb_devices": {"arrayValue": {"values": usb_values}}}}, 
-                   headers={"Authorization": f"Bearer {token}"})
 
-# --- CALLBACKS (The 'Eric-Canas' Logic) ---
-def on_connect(device_id, device_info):
-    msg = f"CONNECTED: {device_info.get(ID_MODEL)} (SN: {device_info.get(ID_SERIAL)})"
-    print(f"[+] {msg}")
-    log_event(global_token, global_uid, msg, "HIGH")
-    sync_usb_list(global_token, global_uid, monitor)
+    payload = {
+        "fields": {
+            "usb_devices": {
+                "arrayValue": {"values": usb_array}
+            }
+        }
+    }
 
-def on_disconnect(device_id, device_info):
-    msg = f"REMOVED: {device_info.get(ID_MODEL)} (ID: {device_id.split('/')[-1]})"
-    print(f"[-] {msg}")
-    log_event(global_token, global_uid, msg, "INFO")
-    sync_usb_list(global_token, global_uid, monitor)
+    requests.patch(url, json=payload, headers={"Authorization": f"Bearer {token}"})
+
+
+def on_connect(dev_id, info):
+    msg = f"CONNECTED: {info.get(ID_MODEL)}"
+    print(msg)
+    push_log(TOKEN, UID, msg, "HIGH")
+    sync_usb_devices(TOKEN, UID, monitor)
+
+
+def on_disconnect(dev_id, info):
+    msg = f"REMOVED: {info.get(ID_MODEL)}"
+    print(msg)
+    push_log(TOKEN, UID, msg, "INFO")
+    sync_usb_devices(TOKEN, UID, monitor)
+
+
+TOKEN, UID = login()
+
+monitor = USBMonitor()
+monitor.start_monitoring(on_connect=on_connect, on_disconnect=on_disconnect)
+
+update_user_state(TOKEN, UID, True)
+sync_usb_devices(TOKEN, UID, monitor)
+
+print("Agent running. Ctrl+C to stop.")
 
 try:
-    global_token, global_uid = login()
-    monitor = USBMonitor()
-    
-    # Start the background daemon
-    monitor.start_monitoring(on_connect=on_connect, on_disconnect=on_disconnect)
-    
-    # Mark Online
-    update_cloud_state(global_token, global_uid, True)
-    sync_usb_list(global_token, global_uid, monitor)
-    
-    print("Security Daemon Active. Press Ctrl+C to stop.")
-    
     while True:
-        # Keep main thread alive and update heartbeat
-        update_cloud_state(global_token, global_uid, True)
-        time.sleep(30)
+        update_user_state(TOKEN, UID, True)
+        time.sleep(20)
 
 except KeyboardInterrupt:
-    print("\nStopping Agent...")
+    print("Stopping...")
+
 finally:
-    if 'global_token' in locals():
-        update_cloud_state(global_token, global_uid, False)
-        monitor.stop_monitoring()
+    update_user_state(TOKEN, UID, False)
+    monitor.stop_monitoring()
