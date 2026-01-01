@@ -27,7 +27,7 @@ body { background:#020617; color:#e5e7eb; }
 </style>
 </head>
 
-<body class="min-h-screen">
+<body>
 
 <div class="max-w-6xl mx-auto p-6">
 
@@ -35,7 +35,7 @@ body { background:#020617; color:#e5e7eb; }
   <h1 class="text-3xl font-bold">🖥 CyberMonitor Dashboard</h1>
   <div class="space-x-2">
     <button onclick="downloadAgent()" class="bg-blue-600 px-4 py-2 rounded">
-      ⬇ Download Monitor
+      ⬇ Download Agent
     </button>
     <button onclick="logout()" class="bg-red-600 px-4 py-2 rounded">
       Logout
@@ -82,11 +82,12 @@ const db = firebase.firestore();
 
 const email = localStorage.getItem("login_email");
 if(!email){
-  document.body.innerHTML = "<h2 class='text-red-500 text-center mt-20'>Unauthorized</h2>";
+  document.body.innerHTML =
+    "<h2 class='text-red-500 text-center mt-20'>Unauthorized – Please Login</h2>";
   throw new Error("Not logged in");
 }
-document.getElementById("userEmail").innerText = email;
 
+document.getElementById("userEmail").innerText = email;
 const uid = email.replace(/@/g,"_").replace(/\./g,"_");
 
 function logout(){
@@ -121,7 +122,8 @@ db.collection("users").doc(uid).collection("usb_status")
       <td>${new Date(d.timestamp).toLocaleString()}</td>
     </tr>`;
   });
-  document.getElementById("usbTable").innerHTML = html || "<tr><td colspan=3>No devices</td></tr>";
+  document.getElementById("usbTable").innerHTML =
+    html || "<tr><td colspan='3'>No devices</td></tr>";
 });
 
 // LOGS
@@ -132,7 +134,9 @@ db.collection("users").doc(uid).collection("logs")
     const d = doc.data();
     html += `<div>
       <b>${d.event}</b> — ${d.device}<br>
-      <span class="text-xs text-gray-400">${new Date(d.timestamp).toLocaleString()}</span>
+      <span class="text-xs text-gray-400">
+        ${new Date(d.timestamp).toLocaleString()}
+      </span>
       <hr class="border-gray-700 my-1">
     </div>`;
   });
