@@ -165,21 +165,29 @@ db.collection("users").doc(uid).collection("logs")
 document.getElementById("filterDate").addEventListener("change",renderLogs);
 
 function renderLogs(){
-  const date=document.getElementById("filterDate").value;
-  let html="";
-  allLogs.forEach(d=>{
-    const logDate=new Date(d.timestamp).toISOString().split("T")[0];
-    if(date && logDate!==date) return;
-    html+=`
+  const selectedDate = document.getElementById("filterDate").value;
+  let html = "";
+
+  allLogs.forEach(d => {
+    const localDate = new Date(d.timestamp).toLocaleDateString("en-CA");
+
+    if (selectedDate && localDate !== selectedDate) return;
+
+    html += `
       <div class="mb-2">
         <b>${d.event}</b> — ${d.device}<br>
-        <span class="text-xs text-gray-400">${new Date(d.timestamp).toLocaleString()}</span>
+        <span class="text-xs text-gray-400">
+          ${new Date(d.timestamp).toLocaleString()}
+        </span>
         <hr class="border-gray-800 mt-2">
-      </div>`;
+      </div>
+    `;
   });
-  document.getElementById("logBox").innerHTML=
-    html||"<p class='text-gray-400'>No logs found</p>";
+
+  document.getElementById("logBox").innerHTML =
+    html || "<p class='text-gray-400'>No logs found</p>";
 }
+
 
 /* ---------------- PRINT ---------------- */
 function printLogs(){
