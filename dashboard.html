@@ -8,7 +8,7 @@
 body {
   background:#0b1020;
   color:#fff;
-  font-family:Arial;
+  font-family: Arial, sans-serif;
   padding:20px;
 }
 .card {
@@ -24,6 +24,9 @@ table {
 td, th {
   padding:8px;
   border-bottom:1px solid #333;
+}
+th {
+  text-align:left;
 }
 </style>
 </head>
@@ -44,22 +47,29 @@ td, th {
 <div class="card">
   <h3>External USB Devices</h3>
   <table>
-    <tr><th>Device</th><th>Token</th></tr>
-    <tbody id="usbBody"></tbody>
+    <thead>
+      <tr>
+        <th>Device</th>
+        <th>Token</th>
+      </tr>
+    </thead>
+    <tbody id="usbBody">
+      <tr><td colspan="2">Loading...</td></tr>
+    </tbody>
   </table>
 </div>
 
 <div class="card">
   <h3>Logs</h3>
-  <div id="logs"></div>
+  <div id="logs">Loading...</div>
 </div>
 
 <script>
-/* ===== CONFIG (MATCH monitor.py) ===== */
+/* ================= CONFIG ================= */
 const PROJECT_ID = "cybermonitor-1ab3c";
 const API_KEY = "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k";
 const UID = "MXXq4tHL35hzKi9PJytPCXWDSzn1";
-/* ==================================== */
+/* ========================================== */
 
 document.getElementById("uid").innerText = UID;
 
@@ -75,9 +85,10 @@ async function apiGet(path) {
   return r.json();
 }
 
+/* ================= STATUS ================= */
 async function loadStatus() {
   const d = await apiGet(`users/${UID}`);
-  if (!d) return;
+  if (!d || !d.fields) return;
 
   const f = d.fields;
   document.getElementById("email").innerText = f.email?.stringValue || "-";
@@ -90,50 +101,82 @@ async function loadStatus() {
       : "-";
 }
 
+/* ================= USB (FIXED) ================= */
 async function loadUSB() {
-  const d = await apiGet(`users/${UID}/status/usb_status`);
-  if (!d) return;
-
   const tbody = document.getElementById("usbBody");
   tbody.innerHTML = "";
 
-  const arr = d.fields?.usb_devices?.arrayValue?.values || [];
-  arr.forEach(v => {
-    const f = v.mapValue.fields;
-    tbody.innerHTML += `
-      <tr>
-        <td>${f.device_name.stringValue}</td>
-        <td>${f.token.stringValue}</td>
-      </tr>`;
+  const d = await apiGet(`users/${UID}/status/usb_status`);
+
+  if (!d || !d.fields || !d.fields.usb_devices) {
+    tbody.innerHTML =
+      "<tr><td colspan='2'>No external USB devices connected</td></tr>";
+    return;
+  }
+
+  const values =
+    d.fields.usb_devices.arrayValue &&
+    d.fields.usb_devices.arrayValue.values
+      ? d.fields.usb_devices.arrayValue.values
+      : [];
+
+  if (values.length === 0) {
+    tbody.innerHTML =
+      "<tr><td colspan='2'>No external USB devices connected</td></tr>";
+    return;
+  }
+
+  values.forEach(item => {
+    if (!item.mapValue || !item.mapValue.fields) return;
+
+    const f = item.mapValue.fields;
+    const name = f.device_name?.stringValue || "Unknown Device";
+    const token = f.token?.stringValue || "N/A";
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${name}</td>
+      <td>${token.slice(0, 45)}...</td>
+    `;
+    tbody.appendChild(tr);
   });
 }
 
+/* ================= LOGS ================= */
 async function loadLogs() {
-  const d = await apiGet(`users/${UID}/logs`);
-  if (!d || !d.documents) return;
-
   const box = document.getElementById("logs");
   box.innerHTML = "";
 
+  const d = await apiGet(`users/${UID}/logs`);
+  if (!d || !d.documents) {
+    box.innerText = "No logs yet";
+    return;
+  }
+
   d.documents
-    .sort((a,b) =>
+    .sort((a, b) =>
       b.fields.timestamp.timestampValue.localeCompare(
-        a.fields.timestamp.timestampValue))
+        a.fields.timestamp.timestampValue
+      )
+    )
     .forEach(l => {
-      box.innerHTML +=
-        `<div>[${l.fields.severity.stringValue}]
-         ${l.fields.message.stringValue}</div>`;
+      const f = l.fields;
+      const div = document.createElement("div");
+      div.innerText =
+        `[${f.severity.stringValue}] ${f.message.stringValue}`;
+      box.appendChild(div);
     });
 }
 
-async function refresh() {
+/* ================= REFRESH LOOP ================= */
+async function refreshAll() {
   await loadStatus();
   await loadUSB();
   await loadLogs();
 }
 
-refresh();
-setInterval(refresh, 3000);
+refreshAll();
+setInterval(refreshAll, 3000);
 </script>
 
 </body>
