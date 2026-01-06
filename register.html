@@ -2,57 +2,63 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Register | CyberMonitor</title>
+<title>CyberMonitor Register</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.tailwindcss.com"></script>
-
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-
-<style>
-body{background:#020617}
-.card{background:#0b1220;border:1px solid #1e293b;border-radius:16px}
-</style>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
 
-<body class="flex items-center justify-center min-h-screen p-4">
+<body class="min-h-screen flex items-center justify-center bg-black">
+<div class="card p-6 w-96 text-white">
 
-<div class="card p-6 w-full max-w-md">
-<h2 class="text-xl font-bold text-white mb-4 text-center">Create Account</h2>
+<h2 class="text-xl mb-4">Register</h2>
 
-<input id="email" type="email" placeholder="Email"
- class="w-full mb-3 p-2 rounded bg-black/30 text-white border border-gray-700">
+<input id="rEmail" placeholder="Email"
+       class="w-full p-2 mb-3 rounded bg-gray-900 border border-gray-700">
 
-<input id="password" type="password" placeholder="Password (min 6 chars)"
- class="w-full mb-4 p-2 rounded bg-black/30 text-white border border-gray-700">
+<input id="rMachine" placeholder="Machine Name"
+       class="w-full p-2 mb-3 rounded bg-gray-900 border border-gray-700">
 
-<button onclick="register()"
- class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded">
-Register
+<button onclick="register()" class="w-full bg-purple-600 p-2 rounded">
+Create Account
 </button>
 
-<p id="err" class="text-red-400 text-sm mt-2 text-center"></p>
+<p id="rErr" class="text-xs text-red-400 mt-2"></p>
 
-<p class="text-gray-400 text-sm text-center mt-3">
-Already have account? <a href="login.html" class="text-blue-400">Login</a>
-</p>
 </div>
 
 <script>
 firebase.initializeApp({
- apiKey:"AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
- authDomain:"cybermonitor-1ab3c.firebaseapp.com",
- projectId:"cybermonitor-1ab3c"
+  apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
+  authDomain: "cybermonitor-1ab3c.firebaseapp.com",
+  projectId: "cybermonitor-1ab3c",
 });
-const auth=firebase.auth();
+
+const fs = firebase.firestore();
 
 function register(){
- const e=email.value.trim(), p=password.value.trim();
- if(p.length<6){err.innerText="Password too short";return;}
- auth.createUserWithEmailAndPassword(e,p)
-  .then(()=>location.href="login.html")
-  .catch(x=>err.innerText=x.message);
+ const em = document.getElementById("rEmail").value.trim();
+ const mc = document.getElementById("rMachine").value.trim();
+
+ const uid = em.replace(/@/g,"_").replace(/\./g,"_");
+
+ /* SEPARATE DOCUMENT PER USER */
+ fs.collection("users").doc(uid).set({
+     email: em,
+     machine: mc,
+     is_online: true,
+     last_seen: new Date().toISOString()
+ }, {merge:true})
+ .then(()=>{
+     localStorage.setItem("cm_user_email", em);
+     location.href="dashboard.html";
+ })
+ .catch(e=>{
+     rErr.innerText=e;
+ });
 }
 </script>
+
 </body>
 </html>
