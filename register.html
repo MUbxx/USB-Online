@@ -1,62 +1,96 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>CyberMonitor Register</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Register | CyberMonitor</title>
+
 <script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+body{ background:#0b1220; font-family:'Inter',sans-serif; }
+.card{ background:#101a33; border:1px solid #1e2b4d; border-radius:18px; }
+</style>
+
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
 
-<body class="min-h-screen flex items-center justify-center bg-black">
-<div class="card p-6 w-96 text-white">
+<body class="flex justify-center items-center h-screen">
 
-<h2 class="text-xl mb-4">Register</h2>
+<div class="card p-8 w-full max-w-md">
+  <h1 class="text-2xl font-bold mb-6 text-white">CyberMonitor Registration</h1>
 
-<input id="rEmail" placeholder="Email"
-       class="w-full p-2 mb-3 rounded bg-gray-900 border border-gray-700">
+  <label class="text-gray-300 block mb-1">Email</label>
+  <input id="email" type="email" class="w-full p-2 mb-3 rounded bg-black/30 border border-gray-700 text-white" placeholder="Enter email">
 
-<input id="rMachine" placeholder="Machine Name"
-       class="w-full p-2 mb-3 rounded bg-gray-900 border border-gray-700">
+  <label class="text-gray-300 block mb-1">Password</label>
+  <input id="password" type="password" class="w-full p-2 mb-4 rounded bg-black/30 border border-gray-700 text-white" placeholder="Create password">
 
-<button onclick="register()" class="w-full bg-purple-600 p-2 rounded">
-Create Account
-</button>
+  <button onclick="registerUser()" class="w-full bg-blue-600 hover:bg-blue-700 p-2 rounded-lg font-semibold text-white">
+    Register
+  </button>
 
-<p id="rErr" class="text-xs text-red-400 mt-2"></p>
+  <p id="error" class="text-red-400 text-sm mt-2 text-center"></p>
 
+  <p class="mt-4 text-gray-400 text-sm text-center">
+    Already registered? <a href="login.html" class="text-blue-400 hover:underline">Login</a>
+  </p>
 </div>
 
 <script>
-firebase.initializeApp({
+// ================= FIREBASE SETUP =================
+const firebaseConfig = {
   apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
   authDomain: "cybermonitor-1ab3c.firebaseapp.com",
   projectId: "cybermonitor-1ab3c",
-});
+  storageBucket: "cybermonitor-1ab3c.appspot.com",
+  messagingSenderId: "569408987884",
+  appId: "1:569408987884:web:0839eb7932c206fc157bc9"
+};
 
-const fs = firebase.firestore();
+firebase.initializeApp(firebaseConfig);
 
-function register(){
- const em = document.getElementById("rEmail").value.trim();
- const mc = document.getElementById("rMachine").value.trim();
+const auth = firebase.auth();
+const db = firebase.firestore();
 
- const uid = em.replace(/@/g,"_").replace(/\./g,"_");
+// ================= REGISTER FUNCTION =================
+function registerUser(){
 
- /* SEPARATE DOCUMENT PER USER */
- fs.collection("users").doc(uid).set({
-     email: em,
-     machine: mc,
-     is_online: true,
-     last_seen: new Date().toISOString()
- }, {merge:true})
- .then(()=>{
-     localStorage.setItem("cm_user_email", em);
-     location.href="dashboard.html";
- })
- .catch(e=>{
-     rErr.innerText=e;
- });
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value.trim();
+  const errBox = document.getElementById("error");
+
+  if(password.length < 6){
+    errBox.innerText="Password must be at least 6 characters";
+    return;
+  }
+
+  auth.createUserWithEmailAndPassword(email, password)
+
+    .then((cred)=>{
+
+        /* ======= MAIN CHANGE HERE ======= */
+        // use EMAIL as document ID instead of UID
+        return db.collection("users").doc(email).set({
+            email: email,
+            machine: "",
+            is_online: false,
+            last_seen: "",
+            created_at: new Date().toISOString(),
+            created_on: new Date().toISOString()
+        });
+    })
+
+    .then(()=>{
+        alert("Account created successfully!");
+        window.location.href="login.html";
+    })
+
+    .catch((error)=>{
+        errBox.innerText = error.message;
+    });
 }
 </script>
 
