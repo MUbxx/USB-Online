@@ -5,50 +5,78 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CyberMonitor Login</title>
 
+<!-- Tailwind -->
 <script src="https://cdn.tailwindcss.com"></script>
 
+<!-- Firebase Compat -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <style>
-body{ background:#0b1220; font-family:'Inter',sans-serif; }
-.card{ background:#101a33; border:1px solid #1e2b4d; border-radius:18px; }
+body{
+   background:#0b1220;
+   font-family:'Inter',sans-serif;
+}
+.card{
+   background:#101a33;
+   border:1px solid #1e2b4d;
+   border-radius:18px;
+}
 </style>
 </head>
 
 <body class="flex justify-center items-center h-screen">
 
 <div class="card p-8 w-full max-w-md">
-    <h1 class="text-2xl font-bold mb-6 text-white text-center">CyberMonitor Login</h1>
 
-    <label class="text-gray-300 block mb-1">Email</label>
-    <input id="email" type="email"
-           class="w-full p-2 mb-3 rounded bg-black/30 border border-gray-700 text-white"
-           placeholder="Enter your email">
+<h1 class="text-2xl font-bold mb-6 text-white text-center">
+CyberMonitor Login
+</h1>
 
-    <label class="text-gray-300 block mb-1">Password</label>
-    <input id="password" type="password"
-           class="w-full p-2 mb-5 rounded bg-black/30 border border-gray-700 text-white"
-           placeholder="Enter password">
+<label class="text-gray-300 block mb-1">Email</label>
+<input id="email" type="email" placeholder="Enter your email"
+class="w-full p-2 mb-3 rounded-lg bg-black/30 border border-gray-700 text-white">
 
-    <button onclick="loginUser()"
-            class="w-full bg-blue-600 hover:bg-blue-700 p-2 rounded-lg font-semibold text-white">
-        Login
-    </button>
+<label class="text-gray-300 block mb-1">Password</label>
+<input id="password" type="password" placeholder="Enter password"
+class="w-full p-2 mb-4 rounded-lg bg-black/30 border border-gray-700 text-white">
 
-    <p onclick="forgotPass()" class="text-center text-xs text-gray-400 mt-3 hover:underline cursor-pointer">
-        Forgot Password?
-    </p>
+<!-- NORMAL LOGIN -->
+<button onclick="loginUser()"
+class="w-full bg-blue-600 hover:bg-blue-700 p-2 rounded-lg font-semibold text-white">
+Login
+</button>
 
-    <p id="loginError" class="text-red-400 text-sm text-center mt-2"></p>
+<!-- FORMAL OAUTH BUTTON -->
+<button onclick="googleLogin()"
+class="w-full bg-white hover:bg-gray-100 text-black p-2 rounded-lg font-semibold mt-3 flex items-center justify-center gap-3 border border-gray-300">
 
-    <p class="mt-4 text-gray-400 text-sm text-center">
-        Don't have an account? <a href="register.html" class="text-blue-400 hover:underline">Register</a>
-    </p>
+<!-- GOOGLE ICON SVG -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="22" height="22">
+<path d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
+<path d="M14.306 28.691l-6.11 4.655C10.53 37.326 16.94 40 24 40c5.268 0 10.046-2.053 13.611-5.417l-5.99-4.655C29.842 31.846 26.742 33 24 33c-5.223 0-9.654-3.343-11.303-8H24v-8H14.306z" />
+</svg>
+
+Sign in with Google
+</button>
+
+<p onclick="forgotPass()"
+class="text-center text-xs text-gray-400 mt-3 hover:underline cursor-pointer">
+Forgot Password?
+</p>
+
+<p id="loginError" class="text-red-400 text-sm text-center mt-2"></p>
+
+<p class="mt-4 text-gray-400 text-sm text-center">
+Don't have an account?
+<a href="register.html" class="text-blue-400 hover:underline">Register</a>
+</p>
+
 </div>
 
 <script>
-// ---------------- Firebase Setup ----------------
+// ================= CONFIG =================
 const firebaseConfig = {
   apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
   authDomain: "cybermonitor-1ab3c.firebaseapp.com",
@@ -57,63 +85,121 @@ const firebaseConfig = {
   appId: "1:569408987884:web:0839eb7932c206fc157bc9"
 };
 
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-
-/* =========== SAME SANITIZE =========== */
-function sanitizeEmail(em){
-   return em.replace(/@/g,"_").replace(/\./g,"_");
+/* ---------- ENVIRONMENT CHECK ---------- */
+if(location.protocol === "file:"){
+   document.getElementById("loginError").innerText =
+   "Open this site via HTTP or HTTPS (not file://)";
 }
 
-// ---------------- Login Function ----------------
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+// ================= NORMAL LOGIN =================
 function loginUser(){
 
-    const email = document.getElementById("email").value.trim();
-    const password = document.getElementById("password").value;
-    const err = document.getElementById("loginError");
+   const email = document.getElementById("email").value.trim();
+   const pass  = document.getElementById("password").value;
 
-    err.innerText="";
+   const err = document.getElementById("loginError");
+   err.innerText="";
 
-    if(!email || !password){
-        err.innerText="Enter email and password.";
-        return;
-    }
+   if(!email || !pass){
+      err.innerText="Enter email and password.";
+      return;
+   }
 
-    auth.signInWithEmailAndPassword(email, password)
+   auth.signInWithEmailAndPassword(email, pass)
 
-        .then(()=>{
+     .then(()=>{
 
-            // ⭐ store SANITIZED email for dashboard
-            localStorage.setItem("login_email", sanitizeEmail(email));
-            localStorage.setItem("is_logged_in","true");
+        localStorage.setItem("login_email", email);
+        localStorage.setItem("is_logged_in","true");
 
-            window.location.href="dashboard.html";
-        })
+        window.location.href="dashboard.html";
+     })
 
-        .catch((e)=>{
-            err.innerText=e.message;
-        });
+     .catch(e=>{
+        err.innerText=e.message;
+     });
 }
 
-// ---------------- Forgot Password ----------------
+// ================= GOOGLE OAUTH =================
+function googleLogin(){
+
+ const err = document.getElementById("loginError");
+ err.innerText="";
+
+ const provider = new firebase.auth.GoogleAuthProvider();
+
+ auth.signInWithPopup(provider)
+
+   .then(result=>{
+
+      const email = result.user.email;
+
+      /* ------ AUTO CREATE FIRESTORE PROFILE ------ */
+      const ref = db.collection("users").doc(email);
+
+      return ref.get().then(doc=>{
+
+         if(!doc.exists){
+            return ref.set({
+               email: email,
+               machine:"",
+               is_online:false,
+               last_seen:"",
+               created_at:new Date().toISOString(),
+               oauth:true
+            });
+         }
+      });
+
+   })
+
+   .then(()=>{
+
+      // ⭐ SAME SESSION
+      const email = auth.currentUser.email;
+
+      localStorage.setItem("login_email", email);
+      localStorage.setItem("is_logged_in","true");
+
+      window.location.href="dashboard.html";
+
+   })
+
+   .catch(e=>{
+      document.getElementById("loginError").innerText = e.message;
+   });
+
+}
+
+// ================= FORGOT PASSWORD =================
 function forgotPass(){
 
-    const email = document.getElementById("email").value.trim();
-    const err = document.getElementById("loginError");
+ const email = document.getElementById("email").value.trim();
+ const err   = document.getElementById("loginError");
 
-    if(!email){
-        err.innerText="Enter your email first.";
-        return;
-    }
+ err.innerText="";
 
-    auth.sendPasswordResetEmail(email)
-        .then(()=>{
-            err.innerText="Reset link sent to email.";
-        })
-        .catch(e=>{
-            err.innerText=e.message;
-        });
+ if(!email){
+    err.innerText="Enter your email first.";
+    return;
+ }
+
+ auth.sendPasswordResetEmail(email)
+
+   .then(()=>{
+      err.innerText="Reset link sent to email.";
+   })
+
+   .catch(e=>{
+      err.innerText=e.message;
+   });
 }
+
 </script>
 
 </body>
