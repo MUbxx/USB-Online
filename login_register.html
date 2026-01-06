@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CyberMonitor Portal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- FIREBASE COMPAT (same as dashboard style) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<style>
+body{
+  background: radial-gradient(circle at top, #020617, #01030a);
+  color:#e5e7eb;
+  font-family: Inter, system-ui, sans-serif;
+}
+.card{
+  background: rgba(2,12,27,.85);
+  backdrop-filter: blur(12px);
+  border:1px solid rgba(255,255,255,.05);
+  border-radius:14px;
+}
+</style>
+</head>
+
+<body class="min-h-screen flex items-center justify-center bg-black">
+
+<div class="card p-6 w-96 text-white">
+
+<!-- TITLE -->
+<h2 class="text-2xl font-bold mb-4 text-center">🛡 CyberMonitor</h2>
+
+<!-- TOGGLE BUTTONS -->
+<div class="flex gap-2 mb-4">
+  <button class="w-1/2 bg-blue-600 p-2 rounded"
+          onclick="showForm('login')">Login</button>
+
+  <button class="w-1/2 bg-purple-600 p-2 rounded"
+          onclick="showForm('register')">Register</button>
+</div>
+
+
+<!-- ============== LOGIN FORM ============== -->
+<div id="loginForm">
+
+  <input id="email" placeholder="Email"
+         class="w-full p-2 mb-3 rounded bg-gray-900 border border-gray-700">
+
+  <input id="pass" type="password" placeholder="Password"
+         class="w-full p-2 mb-3 rounded bg-gray-900 border border-gray-700">
+
+  <button onclick="login()" class="w-full bg-indigo-600 p-2 rounded">
+    Login
+  </button>
+
+  <p class="text-xs mt-3 text-center text-gray-400 cursor-pointer"
+     onclick="showForm('register')">
+     New user? Create account
+  </p>
+
+  <p id="err" class="text-xs text-red-400 mt-2 text-center"></p>
+
+</div>
+
+
+
+<!-- ============== REGISTER FORM ============== -->
+<div id="registerForm" class="hidden">
+
+  <input id="rEmail" placeholder="Email"
+         class="w-full p-2 mb-3 rounded bg-gray-900 border border-gray-700">
+
+  <input id="rMachine" placeholder="Machine Name"
+         class="w-full p-2 mb-3 rounded bg-gray-900 border border-gray-700">
+
+  <input id="rPass" type="password" placeholder="Create Password"
+         class="w-full p-2 mb-3 rounded bg-gray-900 border border-gray-700">
+
+  <button onclick="register()" class="w-full bg-emerald-600 p-2 rounded">
+    Create Account
+  </button>
+
+  <p class="text-xs mt-3 text-center text-gray-400 cursor-pointer"
+     onclick="showForm('login')">
+     Already registered? Login
+  </p>
+
+  <p id="rErr" class="text-xs text-red-400 mt-2 text-center"></p>
+
+</div>
+
+
+
+</div>
+
+<script>
+/* ----------- FIREBASE INIT (USE YOUR REAL CONFIG) ----------- */
+firebase.initializeApp({
+  apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
+  authDomain: "cybermonitor-1ab3c.firebaseapp.com",
+  projectId: "cybermonitor-1ab3c",
+});
+
+const fs = firebase.firestore();
+
+
+/* ----------- FORM TOGGLE ----------- */
+function showForm(name){
+  document.getElementById("loginForm").classList.add("hidden");
+  document.getElementById("registerForm").classList.add("hidden");
+
+  document.getElementById(name+"Form").classList.remove("hidden");
+}
+
+
+
+/* ----------- UID GENERATOR (MUST MATCH MONITOR.PY) ----------- */
+function makeUID(email){
+   return email.replace(/@/g,"_").replace(/\./g,"_");
+}
+
+
+
+/* ----------- LOGIN (PLUMBING FIXED) ----------- */
+function login(){
+ const em  = document.getElementById("email").value.trim();
+ const uid = makeUID(em);
+
+ fs.collection("users").doc(uid).get()
+ .then(doc=>{
+    if(doc.exists){
+       localStorage.setItem("cm_user_email", em);
+       location.href="dashboard.html";   // SAME DASHBOARD FILE
+    }else{
+       err.innerText="User not registered";
+    }
+ })
+ .catch(e=>{
+    err.innerText=e;
+ });
+}
+
+
+
+/* ----------- REGISTER → SEPARATE DOCUMENT PER USER ----------- */
+function register(){
+
+ const em  = document.getElementById("rEmail").value.trim();
+ const mc  = document.getElementById("rMachine").value.trim();
+ const pw  = document.getElementById("rPass").value.trim();
+
+ if(!em || !mc || !pw){
+    rErr.innerText="Fill all fields";
+    return;
+ }
+
+ const uid = makeUID(em);
+
+ /* CREATE INDEPENDENT USER DOCUMENT */
+ fs.collection("users").doc(uid).set({
+
+     email: em,
+     machine: mc,
+
+     /* storing password hash place – plain demo only */
+     password: btoa(pw),
+
+     is_online: true,
+     last_seen: new Date().toISOString()
+
+ }, {merge:true})
+
+ .then(()=>{
+     localStorage.setItem("cm_user_email", em);
+     location.href="dashboard.html";
+ })
+ .catch(e=>{
+     rErr.innerText=e;
+ });
+
+}
+
+</script>
+
+</body>
+</html>
