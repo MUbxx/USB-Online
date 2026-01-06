@@ -31,24 +31,19 @@ body{
 
 <div class="max-w-7xl mx-auto p-6">
 
-<!-- HEADER -->
 <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-
   <div>
     <h1 class="text-3xl font-bold">🛡 CyberMonitor</h1>
     <p class="text-gray-400 text-sm">USB Monitoring Dashboard</p>
   </div>
 
-  <!-- ACTION BUTTONS -->
   <div class="flex flex-wrap gap-2">
-    <a href="https://mubxx.github.io/USB-Online/monitor.py"
-       download
+    <a href="https://mubxx.github.io/USB-Online/monitor.py" download
        class="bg-sky-600 hover:bg-sky-700 px-4 py-2 rounded-lg text-sm font-medium">
       Download Agent
     </a>
 
-    <a href="https://mubxx.github.io/USB-Online/setup.bat"
-       download
+    <a href="https://mubxx.github.io/USB-Online/setup.bat" download
        class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg text-sm font-medium">
       Setup (.bat)
     </a>
@@ -70,21 +65,19 @@ body{
   </div>
 </div>
 
-<!-- TABS -->
 <div class="flex gap-2 mb-6">
-  <button class="tab-btn active px-4 py-2 rounded-lg" onclick="openTab('monitor')">
+  <button class="tab-btn active px-4 py-2 rounded-lg" onclick="openTab('monitor', event)">
     Monitoring
   </button>
-  <button class="tab-btn px-4 py-2 rounded-lg" onclick="openTab('logs')">
+  <button class="tab-btn px-4 py-2 rounded-lg" onclick="openTab('logs', event)">
     Logs
   </button>
-  <button class="tab-btn px-4 py-2 rounded-lg" onclick="openTab('profile')">
+  <button class="tab-btn px-4 py-2 rounded-lg" onclick="openTab('profile', event)">
     Profile
   </button>
 </div>
 
-<!-- MONITOR TAB -->
-<div id="monitor" class="tab card p-5">
+<div id="monitor" class="card p-5">
   <h2 class="text-xl font-semibold mb-4">Connected USB Devices</h2>
   <table class="w-full text-sm">
     <thead class="border-b border-gray-700 text-cyan-300">
@@ -98,14 +91,12 @@ body{
   </table>
 </div>
 
-<!-- LOGS TAB -->
-<div id="logs" class="tab card p-5 hidden">
+<div id="logs" class="card p-5 hidden">
   <h2 class="text-xl font-semibold mb-4">USB Activity Logs</h2>
   <div id="logBox" class="max-h-96 overflow-y-auto text-sm"></div>
 </div>
 
-<!-- PROFILE TAB -->
-<div id="profile" class="tab card p-6 hidden">
+<div id="profile" class="card p-6 hidden">
   <h2 class="text-2xl font-semibold mb-4">Profile</h2>
   <div class="grid md:grid-cols-2 gap-4 text-sm">
     <div class="bg-black/30 p-4 rounded">
@@ -130,61 +121,72 @@ body{
 </div>
 
 <script>
-/* ---------------- FIREBASE ---------------- */
 firebase.initializeApp({
   apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
   authDomain: "cybermonitor-1ab3c.firebaseapp.com",
   projectId: "cybermonitor-1ab3c",
 });
-const db = firebase.firestore();
 
-/* ---------------- AUTH ---------------- */
-const email = localStorage.getItem("login_email");
-if(!email) location.href="login.html";
-const uid = email.replace(/@/g,"_").replace(/\./g,"_");
+const firestore = firebase.firestore();
 
-/* ---------------- TABS ---------------- */
-function openTab(tab){
-  document.querySelectorAll(".tab").forEach(t=>t.classList.add("hidden"));
-  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
-  document.getElementById(tab).classList.remove("hidden");
-  event.target.classList.add("active");
-}
 function logout(){
-  localStorage.removeItem("login_email");
+  localStorage.removeItem("cm_user_email");
   location.href="login.html";
 }
 
-/* ---------------- USB MONITOR ---------------- */
-db.collection("users").doc(uid).collection("usb_status")
+/* TAB SWITCH — structure untouched */
+function openTab(tab, e){
+  document.querySelectorAll("#monitor,#logs,#profile")
+      .forEach(t=>t.classList.add("hidden"));
+
+  document.getElementById(tab).classList.remove("hidden");
+
+  document.querySelectorAll(".tab-btn")
+      .forEach(b=>b.classList.remove("active"));
+
+  e.target.classList.add("active");
+}
+
+/* USB STATUS VIEW — OLD LOGIC KEPT */
+const email = localStorage.getItem("cm_user_email");
+if(!email) location.href="login.html";
+
+const uid = email.replace(/@/g,"_").replace(/\./g,"_");
+const usbTable = document.getElementById("usbTable");
+const logBox = document.getElementById("logBox");
+
+/* RENDER USB */
+firestore.collection("users").doc(uid)
+.collection("usb_status")
 .orderBy("timestamp","desc")
 .onSnapshot(snap=>{
   let html="";
   snap.forEach(doc=>{
     const d = doc.data();
-    html += `
-      <tr class="border-b border-gray-800">
+    html += `<tr class="border-b border-gray-800">
         <td class="py-2">${d.name}</td>
         <td class="py-2">${d.risk}</td>
         <td class="py-2">${new Date(d.timestamp).toLocaleString()}</td>
       </tr>`;
   });
-  usbTable.innerHTML =
-    html || "<tr><td colspan='3' class='py-3 text-gray-400'>No USB devices</td></tr>";
+
+  usbTable.innerHTML = html ||
+     "<tr><td colspan='3' class='py-3 text-gray-400'>No USB devices</td></tr>";
 });
 
-/* ---------------- LOGS ---------------- */
+/* LOGS SNAP — KEPT */
 let logs = [];
-db.collection("users").doc(uid).collection("logs")
+firestore.collection("users").doc(uid)
+.collection("logs")
 .orderBy("timestamp","desc")
 .onSnapshot(snap=>{
-  logs = [];
+  logs=[];
   let html="";
   snap.forEach(doc=>{
     const d = doc.data();
     logs.push(d);
-    html += `
-      <div class="mb-3">
+
+    html += `<div class="mb-3">
         <b>${d.event}</b> — ${d.device}<br>
         <span class="text-xs text-gray-400">
           ${new Date(d.timestamp).toLocaleString()}
@@ -192,36 +194,50 @@ db.collection("users").doc(uid).collection("logs")
         <hr class="border-gray-800 mt-2">
       </div>`;
   });
-  logBox.innerHTML = html || "<p class='text-gray-400'>No logs found</p>";
+
+  logBox.innerHTML = html ||
+      "<p class='text-gray-400'>No logs found</p>";
 });
 
-/* ---------------- EXPORT CSV ---------------- */
+/* CSV EXPORT — OLD METHOD KEPT */
 function exportCSV(){
   let csv = "Event,Device,Time\n";
   logs.forEach(l=>{
     csv += `${l.event},${l.device},${new Date(l.timestamp).toLocaleString()}\n`;
   });
-  const blob = new Blob([csv], {type:"text/csv"});
+
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "usb_logs.csv";
+  a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download="usb_logs.csv";
   a.click();
 }
 
-/* ---------------- PRINT ---------------- */
 function printLogs(){
   const w = window.open("");
   w.document.write("<h2>CyberMonitor USB Logs</h2>" + logBox.innerHTML);
   w.print();
 }
 
-/* ---------------- PROFILE ---------------- */
-db.collection("users").doc(uid).onSnapshot(doc=>{
+/* PROFILE VIEW — FIXED NULL SAFE ONLY */
+firestore.collection("users").doc(uid)
+.onSnapshot(doc=>{
   const d = doc.data();
-  pEmail.innerText = d.email;
-  pMachine.innerText = d.machine;
-  pStatus.innerText = d.is_online ? "🟢 Online" : "🔴 Offline";
-  pLastSeen.innerText = new Date(d.last_seen).toLocaleString();
+  if(!d){
+     pStatus.innerText="No profile found";
+     return;
+  }
+
+  document.getElementById("pEmail").innerText =
+        d.email || "";
+
+  document.getElementById("pMachine").innerText =
+        d.machine || "";
+
+  document.getElementById("pStatus").innerText =
+        d.is_online ? "🟢 Online" : "🔴 Offline";
+
+  document.getElementById("pLastSeen").innerText =
+        d.last_seen ? new Date(d.last_seen).toLocaleString() : "";
 });
 </script>
 
