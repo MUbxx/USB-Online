@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>CyberMonitor Login</title>
 
 <!-- Tailwind -->
@@ -34,10 +35,12 @@ body{
 CyberMonitor Login
 </h1>
 
+<!-- EMAIL -->
 <label class="text-gray-300 block mb-1">Email</label>
 <input id="email" type="email" placeholder="Enter your email"
 class="w-full p-2 mb-3 rounded-lg bg-black/30 border border-gray-700 text-white">
 
+<!-- PASSWORD -->
 <label class="text-gray-300 block mb-1">Password</label>
 <input id="password" type="password" placeholder="Enter password"
 class="w-full p-2 mb-4 rounded-lg bg-black/30 border border-gray-700 text-white">
@@ -48,17 +51,20 @@ class="w-full bg-blue-600 hover:bg-blue-700 p-2 rounded-lg font-semibold text-wh
 Login
 </button>
 
-<!-- FORMAL OAUTH BUTTON -->
+<!-- GOOGLE OAUTH BUTTON – FORMAL WITH REAL GOOGLE LOGO -->
 <button onclick="googleLogin()"
-class="w-full bg-white hover:bg-gray-100 text-black p-2 rounded-lg font-semibold mt-3 flex items-center justify-center gap-3 border border-gray-300">
+class="w-full bg-white hover:bg-gray-100 text-black px-3 py-2 rounded-lg font-semibold mt-3 flex items-center justify-center gap-3 border border-gray-300 shadow">
 
-<!-- GOOGLE ICON SVG -->
+<!-- REAL GOOGLE G LOGO SVG -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="22" height="22">
-<path d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
-<path d="M14.306 28.691l-6.11 4.655C10.53 37.326 16.94 40 24 40c5.268 0 10.046-2.053 13.611-5.417l-5.99-4.655C29.842 31.846 26.742 33 24 33c-5.223 0-9.654-3.343-11.303-8H24v-8H14.306z" />
+<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 6.19 30.47 4 24 4 14.62 4 6.51 9.38 2.56 17.22l7.98 6.19C12.43 15.72 17.74 9.5 24 9.5z"/>
+<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l8.3 6.46c4.84-4.47 7.52-11.06 7.52-18.61z"/>
+<path fill="#FBBC05" d="M10.54 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 13.38 0 18.69 0 24s.92 10.62 2.56 14.78l7.98-6.19z"/>
+<path fill="#34A853" d="M24 44.5c-6.26 0-11.57-4.22-13.46-10.09l-7.98 6.19C6.51 38.62 14.62 44 24 44c6.13 0 11.41-2.02 15.67-5.48l-8.3-6.46c-2.2 1.48-5.01 2.42-8.07 2.42z"/>
 </svg>
 
 Sign in with Google
+
 </button>
 
 <p onclick="forgotPass()"
@@ -76,7 +82,7 @@ Don't have an account?
 </div>
 
 <script>
-// ================= CONFIG =================
+// ================= FIREBASE INIT =================
 const firebaseConfig = {
   apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
   authDomain: "cybermonitor-1ab3c.firebaseapp.com",
@@ -85,44 +91,46 @@ const firebaseConfig = {
   appId: "1:569408987884:web:0839eb7932c206fc157bc9"
 };
 
-/* ---------- ENVIRONMENT CHECK ---------- */
-if(location.protocol === "file:"){
-   document.getElementById("loginError").innerText =
-   "Open this site via HTTP or HTTPS (not file://)";
-}
-
 firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
 const db   = firebase.firestore();
 
-// ================= NORMAL LOGIN =================
+// =========== SANITIZE ===========
+function sanitizeEmail(em){
+   return em.replace(/@/g,"_").replace(/\./g,"_");
+}
+
+// ================= EMAIL/PASS LOGIN =================
 function loginUser(){
 
-   const email = document.getElementById("email").value.trim();
-   const pass  = document.getElementById("password").value;
+ const email = document.getElementById("email").value.trim();
+ const pass  = document.getElementById("password").value;
 
-   const err = document.getElementById("loginError");
-   err.innerText="";
+ const err = document.getElementById("loginError");
+ err.innerText="";
 
-   if(!email || !pass){
-      err.innerText="Enter email and password.";
-      return;
-   }
+ if(!email || !pass){
+    err.innerText="Enter email and password.";
+    return;
+ }
 
-   auth.signInWithEmailAndPassword(email, pass)
+ const key = sanitizeEmail(email);
 
-     .then(()=>{
+ auth.signInWithEmailAndPassword(email, pass)
 
-        localStorage.setItem("login_email", email);
-        localStorage.setItem("is_logged_in","true");
+   .then(()=>{
 
-        window.location.href="dashboard.html";
-     })
+      // ⭐ store sanitized key for session
+      localStorage.setItem("login_email", key);
+      localStorage.setItem("is_logged_in","true");
 
-     .catch(e=>{
-        err.innerText=e.message;
-     });
+      window.location.href="dashboard.html";
+   })
+
+   .catch(e=>{
+      err.innerText=e.message;
+   });
 }
 
 // ================= GOOGLE OAUTH =================
@@ -138,13 +146,16 @@ function googleLogin(){
    .then(result=>{
 
       const email = result.user.email;
+      const key   = sanitizeEmail(email);
 
-      /* ------ AUTO CREATE FIRESTORE PROFILE ------ */
-      const ref = db.collection("users").doc(email);
+      const ref = db.collection("users").doc(key);
 
+      // check profile
       return ref.get().then(doc=>{
 
          if(!doc.exists){
+
+            // create NEW OAUTH USER PROFILE
             return ref.set({
                email: email,
                machine:"",
@@ -152,18 +163,21 @@ function googleLogin(){
                last_seen:"",
                created_at:new Date().toISOString(),
                oauth:true
-            });
+            })
+            .then(()=> key);
+
+         }else{
+            return key;
          }
+
       });
 
    })
 
-   .then(()=>{
+   .then(key=>{
 
-      // ⭐ SAME SESSION
-      const email = auth.currentUser.email;
-
-      localStorage.setItem("login_email", email);
+      // ⭐ SAME SESSION FLOW
+      localStorage.setItem("login_email", key);
       localStorage.setItem("is_logged_in","true");
 
       window.location.href="dashboard.html";
