@@ -1,27 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CyberMonitor Login</title>
 
-<!-- Tailwind CSS -->
 <script src="https://cdn.tailwindcss.com"></script>
 
-<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
 <style>
-body {
-    background: #0b1220;
-    font-family: 'Inter', sans-serif;
-}
-.card {
-    background:#101a33;
-    border:1px solid #1e2b4d;
-    border-radius:18px;
-}
+body{ background:#0b1220; font-family:'Inter',sans-serif; }
+.card{ background:#101a33; border:1px solid #1e2b4d; border-radius:18px; }
 </style>
 </head>
 
@@ -30,42 +21,38 @@ body {
 <div class="card p-8 w-full max-w-md">
     <h1 class="text-2xl font-bold mb-6 text-white text-center">CyberMonitor Login</h1>
 
-    <div class="mb-4">
-        <label class="text-gray-300 mb-1 block">Email</label>
-        <input id="email" type="email" placeholder="Enter your email"
-               class="w-full p-2 rounded-lg bg-black/30 border border-gray-700 text-white">
-    </div>
+    <label class="text-gray-300 block mb-1">Email</label>
+    <input id="email" type="email"
+           class="w-full p-2 mb-3 rounded bg-black/30 border border-gray-700 text-white"
+           placeholder="Enter your email">
 
-    <div class="mb-6">
-        <label class="text-gray-300 mb-1 block">Password</label>
-        <input id="password" type="password" placeholder="Enter password"
-               class="w-full p-2 rounded-lg bg-black/30 border border-gray-700 text-white">
-    </div>
+    <label class="text-gray-300 block mb-1">Password</label>
+    <input id="password" type="password"
+           class="w-full p-2 mb-5 rounded bg-black/30 border border-gray-700 text-white"
+           placeholder="Enter password">
 
-    <button onclick="loginUser()" class="w-full bg-blue-600 hover:bg-blue-700 p-2 rounded-lg font-semibold text-white">
+    <button onclick="loginUser()"
+            class="w-full bg-blue-600 hover:bg-blue-700 p-2 rounded-lg font-semibold text-white">
         Login
     </button>
 
-    <p class="text-center text-sm text-gray-400 mt-3 hover:underline cursor-pointer"
-       onclick="forgotPass()">
-       Forgot Password?
+    <p onclick="forgotPass()" class="text-center text-xs text-gray-400 mt-3 hover:underline cursor-pointer">
+        Forgot Password?
     </p>
+
+    <p id="loginError" class="text-red-400 text-sm text-center mt-2"></p>
 
     <p class="mt-4 text-gray-400 text-sm text-center">
-        Don't have an account?
-        <a href="register.html" class="text-blue-400 hover:underline">Register</a>
+        Don't have an account? <a href="register.html" class="text-blue-400 hover:underline">Register</a>
     </p>
-
-    <p id="loginError" class="text-red-500 mt-3 text-sm text-center"></p>
 </div>
 
 <script>
 // ---------------- Firebase Setup ----------------
 const firebaseConfig = {
-  apiKey: "AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
+  apiKey: "AIzaSyCIY6AiBsgrxxxxxxxxxxxxxxxx",
   authDomain: "cybermonitor-1ab3c.firebaseapp.com",
   projectId: "cybermonitor-1ab3c",
-  storageBucket: "cybermonitor-1ab3c.appspot.com",
   messagingSenderId: "569408987884",
   appId: "1:569408987884:web:0839eb7932c206fc157bc9"
 };
@@ -73,37 +60,38 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 
+/* =========== SAME SANITIZE =========== */
+function sanitizeEmail(em){
+   return em.replace(/@/g,"_").replace(/\./g,"_");
+}
+
 // ---------------- Login Function ----------------
-function loginUser() {
+function loginUser(){
 
     const email = document.getElementById("email").value.trim();
     const password = document.getElementById("password").value;
-
     const err = document.getElementById("loginError");
+
     err.innerText="";
 
-    if (!email || !password) {
-        err.innerText = "Please enter email and password.";
+    if(!email || !password){
+        err.innerText="Enter email and password.";
         return;
     }
 
     auth.signInWithEmailAndPassword(email, password)
 
-        .then((userCredential) => {
+        .then(()=>{
 
-            /* ===== MAIN EMAIL BASED FLOW ===== */
+            // ⭐ store SANITIZED email for dashboard
+            localStorage.setItem("login_email", sanitizeEmail(email));
+            localStorage.setItem("is_logged_in","true");
 
-            // Save logged email → dashboard will use as profile key
-            localStorage.setItem("login_email", email);
-
-            // optional: save auth status
-            localStorage.setItem("is_logged_in", "true");
-
-            window.location.href = "dashboard.html";
+            window.location.href="dashboard.html";
         })
 
-        .catch((error) => {
-            err.innerText = error.message;
+        .catch((e)=>{
+            err.innerText=e.message;
         });
 }
 
@@ -114,15 +102,15 @@ function forgotPass(){
     const err = document.getElementById("loginError");
 
     if(!email){
-        err.innerText="Enter your registered email first.";
+        err.innerText="Enter your email first.";
         return;
     }
 
     auth.sendPasswordResetEmail(email)
         .then(()=>{
-            err.innerText="Password reset link sent to email.";
+            err.innerText="Reset link sent to email.";
         })
-        .catch((e)=>{
+        .catch(e=>{
             err.innerText=e.message;
         });
 }
