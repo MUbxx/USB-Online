@@ -11,7 +11,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 # ================= FIREBASE INIT =================
-cred = credentials.Certificate("cybermonitor-1ab3c-firebase-adminsdk-fbsvc-e5d6987eba.json")
+cred = credentials.Certificate("cybermonitor-1ab3c-firebase-adminsdk-fbsvc-25da1d93f1.json")
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
@@ -186,3 +186,4 @@ except KeyboardInterrupt:
         "last_seen": now_ist()
     })
     print("\n[!] Monitoring stopped")
+
