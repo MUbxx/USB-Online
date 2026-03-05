@@ -1,4 +1,6 @@
 @echo off
+cd /d %~dp0
+
 echo Setting USB Monitor email configuration...
 
 set USB_MONITOR_APP_PASSWORD=pqvq flbn hlln rves
