@@ -3,28 +3,35 @@
 <head>
 <meta charset="UTF-8">
 <title>CyberMonitor Dashboard</title>
+
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <script src="https://cdn.tailwindcss.com"></script>
+
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <style>
+
 body{
 background: radial-gradient(circle at top,#020617,#01030a);
 color:#e5e7eb;
-font-family:Inter,system-ui;
+font-family: Inter,system-ui;
 }
+
 .card{
 background:rgba(2,12,27,.85);
 backdrop-filter:blur(12px);
 border:1px solid rgba(255,255,255,.05);
 border-radius:14px;
 }
+
 .tab-btn.active{
 background:#2563eb;
 }
+
 </style>
+
 </head>
 
 <body>
@@ -32,48 +39,65 @@ background:#2563eb;
 <div class="max-w-7xl mx-auto p-6">
 
 <!-- HEADER -->
-<div class="flex justify-between items-center mb-6">
+
+<div class="flex flex-col lg:flex-row justify-between items-center gap-4 mb-6">
 
 <div>
+
 <h1 class="text-3xl font-bold">🛡 CyberMonitor</h1>
 <p class="text-gray-400 text-sm">USB Monitoring Dashboard</p>
+
 </div>
 
 <div class="flex gap-2">
 
-<button onclick="exportCSV()" class="bg-emerald-600 px-4 py-2 rounded">Export CSV</button>
+<button onclick="exportCSV()"
+class="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg text-sm">
+Export CSV
+</button>
 
-<button onclick="logout()" class="bg-red-600 px-4 py-2 rounded">Logout</button>
+<button onclick="logout()"
+class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm">
+Logout
+</button>
 
 </div>
 
 </div>
 
 <!-- TABS -->
+
 <div class="flex gap-2 mb-6">
 
-<button class="tab-btn active px-4 py-2 rounded" onclick="openTab('monitor')">
+<button class="tab-btn active px-4 py-2 rounded-lg"
+onclick="openTab('monitor')">
 Monitoring
 </button>
 
-<button class="tab-btn px-4 py-2 rounded" onclick="openTab('approvals')">
+<button class="tab-btn px-4 py-2 rounded-lg"
+onclick="openTab('approvals')">
 Approvals
 </button>
 
-<button class="tab-btn px-4 py-2 rounded" onclick="openTab('logs')">
+<button class="tab-btn px-4 py-2 rounded-lg"
+onclick="openTab('logs')">
 Logs
 </button>
 
-<button class="tab-btn px-4 py-2 rounded" onclick="openTab('profile')">
+<button class="tab-btn px-4 py-2 rounded-lg"
+onclick="openTab('profile')">
 Profile
 </button>
 
 </div>
 
 <!-- MONITOR TAB -->
+
 <div id="monitor" class="tab card p-5">
 
-<h2 class="text-xl font-semibold mb-4">Connected USB Devices</h2>
+<h2 class="text-xl font-semibold mb-4">
+Connected USB Devices
+</h2>
 
 <table class="w-full text-sm">
 
@@ -94,9 +118,12 @@ Profile
 </div>
 
 <!-- APPROVAL TAB -->
+
 <div id="approvals" class="tab card p-5 hidden">
 
-<h2 class="text-xl font-semibold mb-4">USB Approval Requests</h2>
+<h2 class="text-xl font-semibold mb-4">
+USB Approval Requests
+</h2>
 
 <table class="w-full text-sm">
 
@@ -117,15 +144,19 @@ Profile
 </div>
 
 <!-- LOGS TAB -->
+
 <div id="logs" class="tab card p-5 hidden">
 
-<h2 class="text-xl font-semibold mb-4">USB Activity Logs</h2>
+<h2 class="text-xl font-semibold mb-4">
+USB Activity Logs
+</h2>
 
 <div id="logBox" class="max-h-96 overflow-y-auto text-sm"></div>
 
 </div>
 
 <!-- PROFILE TAB -->
+
 <div id="profile" class="tab card p-6 hidden">
 
 <h2 class="text-2xl font-semibold mb-4">Profile</h2>
@@ -163,30 +194,35 @@ Profile
 /* FIREBASE */
 
 firebase.initializeApp({
+
 apiKey:"AIzaSyCIY6AiBsGrq7wM0BBYGW2lM_0FLWjnH0k",
 authDomain:"cybermonitor-1ab3c.firebaseapp.com",
 projectId:"cybermonitor-1ab3c"
+
 })
 
-const db=firebase.firestore()
+const db = firebase.firestore()
 
 /* AUTH */
 
-const email=localStorage.getItem("login_email")
+const email = localStorage.getItem("login_email")
 
 if(!email) location.href="login.html"
 
-const uid=email.replace(/@/g,"_").replace(/\./g,"_")
+const uid = email.replace(/@/g,"_").replace(/\./g,"_")
 
 /* TABS */
 
 function openTab(tab){
 
-document.querySelectorAll(".tab").forEach(t=>t.classList.add("hidden"))
+document.querySelectorAll(".tab")
+.forEach(t=>t.classList.add("hidden"))
 
-document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"))
+document.querySelectorAll(".tab-btn")
+.forEach(b=>b.classList.remove("active"))
 
-document.getElementById(tab).classList.remove("hidden")
+document.getElementById(tab)
+.classList.remove("hidden")
 
 event.target.classList.add("active")
 
@@ -197,23 +233,23 @@ event.target.classList.add("active")
 function logout(){
 
 localStorage.removeItem("login_email")
-
 location.href="login.html"
 
 }
 
 /* USB MONITOR */
 
-db.collection("users").doc(uid)
+db.collection("users")
+.doc(uid)
 .collection("usb_status")
 .orderBy("timestamp","desc")
-.onSnapshot(snap=>{
+.onSnapshot(snapshot=>{
 
 let html=""
 
-snap.forEach(doc=>{
+snapshot.forEach(doc=>{
 
-const d=doc.data()
+const d = doc.data()
 
 html+=`
 
@@ -221,29 +257,36 @@ html+=`
 
 <td class="py-2">${d.name}</td>
 
-<td class="py-2">${d.risk}</td>
+<td class="py-2">${d.risk || "MEDIUM"}</td>
 
-<td class="py-2">${new Date(d.timestamp).toLocaleString()}</td>
+<td class="py-2">
+${new Date(d.timestamp).toLocaleString()}
+</td>
 
-</tr>`
+</tr>
+
+`
 
 })
 
-usbTable.innerHTML=html
+usbTable.innerHTML = html || 
+"<tr><td colspan='3'>No devices</td></tr>"
 
 })
 
 /* APPROVAL REQUESTS */
 
-db.collection("users").doc(uid)
+db.collection("users")
+.doc(uid)
 .collection("approval_requests")
-.onSnapshot(snap=>{
+.where("status","==","pending")
+.onSnapshot(snapshot=>{
 
 let html=""
 
-snap.forEach(doc=>{
+snapshot.forEach(doc=>{
 
-const d=doc.data()
+const d = doc.data()
 
 html+=`
 
@@ -251,41 +294,60 @@ html+=`
 
 <td class="py-2">${d.device_name}</td>
 
-<td class="py-2">${new Date(d.timestamp).toLocaleString()}</td>
+<td class="py-2">
+${new Date(d.timestamp).toLocaleString()}
+</td>
 
-<td>
+<td class="space-x-2">
 
 <button onclick="approve('${doc.id}')"
-class="bg-green-600 px-3 py-1 rounded text-xs">Approve</button>
+class="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-xs">
+Approve
+</button>
 
 <button onclick="reject('${doc.id}')"
-class="bg-red-600 px-3 py-1 rounded text-xs">Reject</button>
+class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-xs">
+Reject
+</button>
 
 </td>
 
-</tr>`
+</tr>
+
+`
 
 })
 
-approvalTable.innerHTML=html
+approvalTable.innerHTML = html || 
+"<tr><td colspan='3'>No pending requests</td></tr>"
 
 })
 
 function approve(device){
 
-db.collection("users").doc(uid)
+db.collection("users")
+.doc(uid)
 .collection("approval_requests")
 .doc(device)
-.update({status:"approved"})
+.update({
+
+status:"approved"
+
+})
 
 }
 
 function reject(device){
 
-db.collection("users").doc(uid)
+db.collection("users")
+.doc(uid)
 .collection("approval_requests")
 .doc(device)
-.update({status:"rejected"})
+.update({
+
+status:"rejected"
+
+})
 
 }
 
@@ -293,18 +355,19 @@ db.collection("users").doc(uid)
 
 let logs=[]
 
-db.collection("users").doc(uid)
+db.collection("users")
+.doc(uid)
 .collection("logs")
 .orderBy("timestamp","desc")
-.onSnapshot(snap=>{
+.onSnapshot(snapshot=>{
 
 logs=[]
 
 let html=""
 
-snap.forEach(doc=>{
+snapshot.forEach(doc=>{
 
-const d=doc.data()
+const d = doc.data()
 
 logs.push(d)
 
@@ -322,11 +385,13 @@ ${new Date(d.timestamp).toLocaleString()}
 
 <hr class="border-gray-800 mt-2">
 
-</div>`
+</div>
+
+`
 
 })
 
-logBox.innerHTML=html
+logBox.innerHTML = html
 
 })
 
@@ -338,7 +403,8 @@ let csv="Event,Device,Time\n"
 
 logs.forEach(l=>{
 
-csv+=`${l.event},${l.device},${new Date(l.timestamp).toLocaleString()}\n`
+csv+=`${l.event},${l.device},
+${new Date(l.timestamp).toLocaleString()}\n`
 
 })
 
@@ -356,18 +422,16 @@ a.click()
 
 /* PROFILE */
 
-db.collection("users").doc(uid)
+db.collection("users")
+.doc(uid)
 .onSnapshot(doc=>{
 
-const d=doc.data()
+const d = doc.data()
 
-pEmail.innerText=d.email
-
-pMachine.innerText=d.machine
-
-pStatus.innerText=d.is_online?"🟢 Online":"🔴 Offline"
-
-pLastSeen.innerText=new Date(d.last_seen).toLocaleString()
+pEmail.innerText = d.email
+pMachine.innerText = d.machine
+pStatus.innerText = d.is_online ? "🟢 Online":"🔴 Offline"
+pLastSeen.innerText = new Date(d.last_seen).toLocaleString()
 
 })
 
