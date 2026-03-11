@@ -40,7 +40,7 @@ body{ background:#0b1220; font-family:'Inter',sans-serif; }
   <p id="error" class="text-red-400 text-sm mt-2 text-center"></p>
 
   <p class="mt-4 text-gray-400 text-sm text-center">
-    Already registered? <a href="index.html" class="text-blue-400 hover:underline">Login</a>
+    Already registered? <a href="login.html" class="text-blue-400 hover:underline">Login</a>
   </p>
 </div>
 
@@ -100,7 +100,7 @@ function registerUser(){
         const em = document.getElementById("email").value.trim();
         localStorage.setItem("login_email", sanitizeEmail(em));
 
-        window.location.href="index.html";
+        window.location.href="login.html";
     })
 
     .catch((error)=>{
