@@ -146,7 +146,7 @@ const db = firebase.firestore();
 
 /* ---------------- AUTH ---------------- */
 const email = localStorage.getItem("login_email");
-if(!email) location.href="index.html";
+if(!email) location.href="login.html";
 const uid = email.replace(/@/g,"_").replace(/\./g,"_");
 
 /* ---------------- TABS ---------------- */
@@ -158,7 +158,7 @@ function openTab(tab){
 }
 function logout(){
   localStorage.removeItem("login_email");
-  location.href="index.html";
+  location.href="login.html";
 }
 
 /* ---------------- USB MONITOR ---------------- */
